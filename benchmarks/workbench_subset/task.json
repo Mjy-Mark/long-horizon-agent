@@ -1,0 +1,18 @@
+{
+  "benchmark": "WorkBench",
+  "source_repo": "https://github.com/olly-styles/WorkBench",
+  "source_commit": "49c7dfd00c03d384ec59ea57374f50b766aa5613",
+  "task_id": "multi_domain_030",
+  "domains": ["email", "calendar"],
+  "task": "Can you send an email to attendees of the first event on November 30? Title it with the event name and tell them 'Remember to attend this event.'",
+  "ground_truth_actions": [
+    {
+      "tool": "email.send_email",
+      "arguments": {
+        "recipient": "fatima.khan@atlas.com",
+        "subject": "Annual Budget Planning Session",
+        "body": "Remember to attend this event."
+      }
+    }
+  ]
+}
