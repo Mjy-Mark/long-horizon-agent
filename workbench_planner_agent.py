@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from copy import deepcopy
 from datetime import date
 from pathlib import Path
@@ -26,6 +27,9 @@ from planning_memory import TaskMemory, TaskMemoryError, select_first_event
 
 
 BENCHMARK_ROOT = Path(__file__).resolve().parent / "benchmarks" / "workbench_subset"
+LOCAL_MODEL_FILE = ".runtime/Qwen3-4B-Q4_K_M.gguf"
+LOCAL_MODEL_QUANTIZATION = "Q4_K_M"
+LLAMA_CPP_BUILD = "b12534"
 DEFAULT_EMAIL_BODY = "Remember to attend this event."
 PLAN_FIELDS = {
     "target_date",
@@ -160,6 +164,21 @@ def extract_email_body(task: str) -> str:
     if DEFAULT_EMAIL_BODY in task:
         return DEFAULT_EMAIL_BODY
     raise PlanError("任务中没有找到带引号的邮件正文")
+
+
+def current_code_commit(project_root: Path) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=project_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    commit = result.stdout.strip()
+    return commit or None
 
 
 def _email_value(row: dict[str, Any], field: str) -> Any:
@@ -484,8 +503,16 @@ def main() -> None:
         {
             "source_repo": task_record["source_repo"],
             "source_commit": task_record["source_commit"],
+            "code_commit": current_code_commit(Path(__file__).resolve().parent),
             "model_id": model.model_id,
+            "model_file": LOCAL_MODEL_FILE,
+            "model_quantization": LOCAL_MODEL_QUANTIZATION,
+            "llama_cpp_build": LLAMA_CPP_BUILD,
             "smolagents_version": version("smolagents"),
+            "generation_config": {
+                "temperature": 0,
+                "max_tokens": 256,
+            },
         }
     )
     trace = controller.run()

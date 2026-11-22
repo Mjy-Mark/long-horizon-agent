@@ -54,7 +54,7 @@ Improved 2 尚未实现。发送异常后的不确定状态、状态查询和有
 
 Improved 1 的离线记录位于 `experiments/manifests/improved_1_offline.json`。该记录使用本地测试夹具，不调用模型，结果为选择事件 `00000200`，新增 1 封目标邮件，验证器判定任务成功，额外副作用为空。
 
-真实 Qwen 结果需要在可访问主机 CUDA 的 Ubuntu 环境中单独运行。当前仓库没有把离线夹具结果标记为真实模型结果。
+离线夹具结果仍然保存在独立 manifest 中，没有被标记为真实模型结果。真实 Qwen 运行结果保存在 `experiments/manifests/improved_1_qwen.json`。
 
 ## 本地 Qwen 入口
 
@@ -64,7 +64,9 @@ Improved 1 的离线记录位于 `experiments/manifests/improved_1_offline.json`
 /home/mark/micromamba/envs/longagent/bin/python workbench_planner_agent.py
 ```
 
-运行轨迹会写入 `runs/workbench-improved1-<uuid>.json`。真实运行前应记录模型文件、量化版本、llama.cpp 版本、采样参数、任务文本、初始沙箱状态和代码提交。
+运行轨迹会写入 `runs/workbench-improved1-<uuid>.json`。真实运行记录包含模型文件、量化版本、llama.cpp 版本、采样参数、任务文本、初始沙箱状态和代码提交。
+
+当前已完成一次真实 Qwen 验证。最新轨迹为 `runs/workbench-improved1-7b0c8169ff324a6da77ba541945ea194.json`，使用主机侧 CUDA 运行 Qwen3-4B Q4_K_M。
 
 ## 候选集完整性边界
 
@@ -88,4 +90,4 @@ Baseline 轨迹显示原始自由 ReAct 流程新增了 5 封邮件，其中 1 �
 
 ## 当前状态
 
-Improved 1 的本地控制器、TaskMemory、ExecutionMonitor、测试和离线记录已经完成。真实 Qwen 端到端运行仍待在可访问主机 CUDA 的环境中执行。Recovery 实现暂不在当前阶段范围内。
+Improved 1 的本地控制器、TaskMemory、ExecutionMonitor、测试、离线记录和一次真实 Qwen 验证已经完成。Recovery 实现暂不在当前阶段范围内。
