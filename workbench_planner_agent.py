@@ -245,6 +245,8 @@ class WorkbenchPlannerController:
             "tool_calls": [],
             "memory_snapshots": [],
             "monitor_checks": [],
+            "candidate_selection_scope": "returned_candidates_only",
+            "candidate_completeness": "not_guaranteed",
             "initial_state": deepcopy(self.state_snapshot_fn()),
             "initial_sent_emails": deepcopy(self._initial_sent_emails),
             "success": False,

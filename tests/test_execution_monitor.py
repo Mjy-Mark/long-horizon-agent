@@ -145,6 +145,36 @@ class TestExecutionMonitor(unittest.TestCase):
         self.assertEqual(context.exception.reason, "send_already_attempted")
         self.assertEqual(monitor.send_count, 1)
 
+    def test_side_effect_then_transport_exception_still_blocks_retry(self):
+        memory = prepared_memory()
+        monitor = ExecutionMonitor()
+        sent = []
+
+        def sends_then_raises(*args):
+            sent.append(args)
+            raise RuntimeError("transport error after commit")
+
+        with self.assertRaises(RuntimeError):
+            monitor.guarded_send_email(
+                memory,
+                sends_then_raises,
+                "a@example.com",
+                "Morning Meeting",
+                "Reminder",
+            )
+
+        self.assertEqual(len(sent), 1)
+        self.assertTrue(memory.send_attempted)
+        with self.assertRaises(MonitorViolation) as context:
+            monitor.guarded_send_email(
+                memory,
+                lambda *args: sent.append(args),
+                "a@example.com",
+                "Morning Meeting",
+                "Reminder",
+            )
+        self.assertEqual(context.exception.reason, "send_already_attempted")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -116,6 +116,10 @@ class TestPlannerController(unittest.TestCase):
         self.assertEqual(len(trace["monitor_checks"]), 1)
         self.assertTrue(trace["monitor_checks"][0]["allowed"])
         self.assertEqual(
+            trace["candidate_selection_scope"], "returned_candidates_only"
+        )
+        self.assertEqual(trace["candidate_completeness"], "not_guaranteed")
+        self.assertEqual(
             fake.search_calls[0]["time_min"], "2023-11-30 00:00:00"
         )
 
@@ -164,6 +168,32 @@ class TestPlannerController(unittest.TestCase):
         self.assertEqual(len(fake.send_calls), 1)
         self.assertEqual(len(trace["tool_calls"]), 3)
         self.assertIn("error", trace["tool_calls"][0])
+
+    def test_final_state_with_zero_or_multiple_new_emails_fails(self):
+        for final_emails in ([], [{"email_id": "1"}, {"email_id": "2"}]):
+            with self.subTest(final_emails=final_emails):
+                fake = FakeWorkbench()
+                visible_emails = []
+
+                def send_without_visible_state(recipient, subject, body):
+                    fake.send_calls.append((recipient, subject, body))
+                    visible_emails.extend(row.copy() for row in final_emails)
+                    return "Email sent successfully."
+
+                controller = WorkbenchPlannerController(
+                    task_id="email_first_event_001",
+                    task=TASK,
+                    search_events_fn=fake.search_events,
+                    send_email_fn=send_without_visible_state,
+                    list_sent_emails_fn=lambda: [row.copy() for row in visible_emails],
+                    state_snapshot_fn=fake.snapshot,
+                )
+                trace = controller.run(PLAN)
+
+                self.assertFalse(trace["success"])
+                self.assertEqual(
+                    trace["termination_reason"], "final_state_email_mismatch"
+                )
 
     def test_controller_can_obtain_plan_from_model_without_tools(self):
         fake = FakeWorkbench()

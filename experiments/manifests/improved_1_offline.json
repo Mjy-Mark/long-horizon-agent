@@ -1,0 +1,15 @@
+{
+  "method": "improved_1",
+  "task_id": "multi_domain_030",
+  "model_used": false,
+  "tools": "fake_workbench",
+  "task_success": true,
+  "new_email_count": 1,
+  "harmful_side_effects": [],
+  "status": "offline_validation",
+  "test_count": 24,
+  "selected_event_id": "00000200",
+  "candidate_selection_scope": "returned_candidates_only",
+  "candidate_completeness": "not_guaranteed",
+  "notes": "结构化计划由测试夹具提供，控制器完成确定性事件选择、发送前检查和最终状态验证。"
+}

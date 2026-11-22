@@ -62,6 +62,25 @@ class TestPlanningMemory(unittest.TestCase):
         result = select_first_event(json.dumps(events), "2023-11-30")
         self.assertEqual(result["event_id"], "001")
 
+    def test_selector_only_sees_events_returned_by_the_tool(self):
+        start_times = ["09:30", "10:30", "11:30", "12:30", "13:30", "08:00"]
+        events = [
+            {
+                "event_id": f"00{i}",
+                "event_name": f"Event {i}",
+                "participant_email": f"person{i}@example.com",
+                "event_start": f"2023-11-30 {start_times[i - 1]}:00",
+            }
+            for i in range(1, 7)
+        ]
+        returned_candidates = json.dumps(events[:5])
+
+        result = select_first_event(returned_candidates, "2023-11-30")
+        full_result = select_first_event(json.dumps(events), "2023-11-30")
+
+        self.assertEqual(result["event_id"], "001")
+        self.assertEqual(full_result["event_id"], "006")
+
     def test_memory_saves_and_updates_target_event(self):
         memory = TaskMemory("task-1", "2023-11-30")
         memory.set_target_event(self.events[0])

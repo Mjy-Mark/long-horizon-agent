@@ -1,0 +1,91 @@
+# Long-Horizon Agent
+
+这个项目在本地 WorkBench 子集上比较自由 ReAct 和受约束的任务执行流程。
+
+## 当前方法
+
+Baseline 使用自由的 ReAct 工具调用流程。
+
+Improved 1 使用以下流程。
+
+```text
+结构化 Planner
+    ↓
+确定性事件选择
+    ↓
+TaskMemory
+    ↓
+ExecutionMonitor
+    ↓
+一次受保护的邮件发送
+    ↓
+最终状态验证
+```
+
+Improved 1 的准确名称是 `Structured Planner + Deterministic Executor + Task Memory + Execution Monitor`。当前实现由 Python 控制器执行搜索、事件选择、邮件准备、发送和状态验证。LLM 只生成结构化计划，当前流程没有让 LLM 根据工具观测进行多轮 ReAct 决策。
+
+Improved 2 尚未实现。发送异常后的不确定状态、状态查询和有限恢复重试属于下一阶段。
+
+当前 Planner 针对这个 WorkBench 子集任务提供 2023 年日期解释。`target_date` 会经过格式校验，任务专用的年份约束仍然属于当前基准适配逻辑，不能作为通用日期解析器的结论。
+
+## 项目文件
+
+- `workbench_subset_agent.py` 保存 Baseline 适配器。
+- `workbench_planner_agent.py` 保存 Improved 1 控制器和本地 Qwen 计划入口。
+- `planning_memory.py` 保存事件选择器和 `TaskMemory`。
+- `execution_monitor.py` 保存发送指纹、参数检查和单次发送保护。
+- `verify_workbench_subset.py` 根据最终邮箱状态验证任务结果。
+- `snapshots/baseline/` 保存 Baseline 文件、轨迹和 Git 状态。
+
+## 本地测试
+
+使用项目环境运行全部测试。
+
+```bash
+/home/mark/micromamba/envs/longagent/bin/python -m unittest discover \
+  -s tests \
+  -p "test_*.py" \
+  -v
+```
+
+当前共有 24 项测试，覆盖无序候选、候选截断边界、TaskMemory 状态、错误收件人、错误标题、重复发送、查询重试、发送后写入再抛异常，以及最终状态为零封或多封邮件的情况。
+
+## 离线验证
+
+Improved 1 的离线记录位于 `experiments/manifests/improved_1_offline.json`。该记录使用本地测试夹具，不调用模型，结果为选择事件 `00000200`，新增 1 封目标邮件，验证器判定任务成功，额外副作用为空。
+
+真实 Qwen 结果需要在可访问主机 CUDA 的 Ubuntu 环境中单独运行。当前仓库没有把离线夹具结果标记为真实模型结果。
+
+## 本地 Qwen 入口
+
+启动兼容 OpenAI API 的本地 `llama-server` 后，可以运行以下入口。
+
+```bash
+/home/mark/micromamba/envs/longagent/bin/python workbench_planner_agent.py
+```
+
+运行轨迹会写入 `runs/workbench-improved1-<uuid>.json`。真实运行前应记录模型文件、量化版本、llama.cpp 版本、采样参数、任务文本、初始沙箱状态和代码提交。
+
+## 候选集完整性边界
+
+当前 Baseline 适配器的 `search_events()` 返回 `events[:5]`。`select_first_event()` 只能从工具实际返回的候选集中选择最早活动。当前 `2023-11-30` 有四场活动，因此任务选择了 `00000200`。当某一天有六场或更多活动时，最早活动可能位于工具返回上限之外。
+
+当前结论应表述为：
+
+> 当前实现能够选择工具返回候选集中的最早活动。对于超过工具返回上限的日期，尚未实现候选结果完整性保证。
+
+后续可以增加分页、完整性标志或适配器级别的完整日期查询接口。
+
+当初始邮箱已经存在相同发送指纹时，当前 Improved 1 会阻止发送并将任务记录为失败。`already_satisfied`、`duplicate_blocked`、`send_uncertain` 和 `send_failed` 的区分留给 Improved 2 的状态恢复设计。
+
+## WorkBench 范围
+
+仓库中的 `benchmarks/workbench_subset/` 只保留一条日历和邮件任务所需的数据。它用于本地适配和控制器验证，不代表完整 WorkBench 数据集的正式成绩。`verify_workbench_subset.py` 检查最终新增邮件数量和邮件字段，不等同于 WorkBench 官方评分流程。
+
+## Baseline 记录
+
+Baseline 轨迹显示原始自由 ReAct 流程新增了 5 封邮件，其中 1 封匹配目标邮件，其他邮件属于额外副作用。Baseline manifest 位于 `experiments/manifests/baseline.json`。
+
+## 当前状态
+
+Improved 1 的本地控制器、TaskMemory、ExecutionMonitor、测试和离线记录已经完成。真实 Qwen 端到端运行仍待在可访问主机 CUDA 的环境中执行。Recovery 实现暂不在当前阶段范围内。
