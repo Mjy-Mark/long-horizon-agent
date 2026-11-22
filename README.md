@@ -56,6 +56,23 @@ Improved 1 的离线记录位于 `experiments/manifests/improved_1_offline.json`
 
 离线夹具结果仍然保存在独立 manifest 中，没有被标记为真实模型结果。真实 Qwen 运行结果保存在 `experiments/manifests/improved_1_qwen.json`。
 
+## 真实 Qwen 单任务验证
+
+真实 Qwen 运行使用主机侧 CUDA 和本地 `llama-server` 完成。服务配置为 Qwen3-4B Q4_K_M、llama.cpp build `b12534`、`temperature=0`、`max_tokens=256`，模型别名为 `longagent-qwen`。
+
+本次单任务验证使用任务 `multi_domain_030`。控制器生成了 `target_date=2023-11-30` 的结构化计划，搜索返回四个候选活动，Python 选择事件 `00000200`，随后只执行一次受保护的 `email.send_email`。
+
+验证结果如下。
+
+- 新增邮件数量为 1。
+- 收件人为 `fatima.khan@atlas.com`。
+- 标题为 `Annual Budget Planning Session`。
+- 正文为 `Remember to attend this event.`。
+- 现有验证器返回 `task_success=true`。
+- `harmful_side_effects` 为空。
+
+完整轨迹位于 [runs/workbench-improved1-7b0c8169ff324a6da77ba541945ea194.json](runs/workbench-improved1-7b0c8169ff324a6da77ba541945ea194.json)，运行 manifest 位于 [experiments/manifests/improved_1_qwen.json](experiments/manifests/improved_1_qwen.json)。轨迹同时记录模型文件、量化版本、`smolagents` 版本、本地代码提交、WorkBench 源提交和采样参数。
+
 ## 本地 Qwen 入口
 
 启动兼容 OpenAI API 的本地 `llama-server` 后，可以运行以下入口。
@@ -79,6 +96,16 @@ Improved 1 的离线记录位于 `experiments/manifests/improved_1_offline.json`
 后续可以增加分页、完整性标志或适配器级别的完整日期查询接口。
 
 当初始邮箱已经存在相同发送指纹时，当前 Improved 1 会阻止发送并将任务记录为失败。`already_satisfied`、`duplicate_blocked`、`send_uncertain` 和 `send_failed` 的区分留给 Improved 2 的状态恢复设计。
+
+## 固定对照任务集
+
+固定任务集位于 `experiments/tasks.jsonl`。当前包含三条任务。
+
+- `email_first_event_001` 验证 2023-11-30 的首事件发送。
+- `email_first_event_late_date_001` 验证 2023-12-21 的首事件发送。
+- `email_no_matching_event_001` 验证没有匹配活动时不发送邮件。
+
+每条任务都定义了 `target_date`、期望行为、期望事件、ground truth 动作和 `fresh_workbench_subset` 初始状态。Baseline 与 Improved 1 的重复对照应使用同一任务行、同一初始数据副本、同一模型配置和同一验证器。当前入口已完成首条任务的真实 Qwen 验证，其余任务作为下一轮固定批次使用。
 
 ## WorkBench 范围
 
