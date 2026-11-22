@@ -1,0 +1,10 @@
+{
+  "method": "baseline_react",
+  "agent_file": "workbench_subset_agent.py",
+  "verifier_file": "verify_workbench_subset.py",
+  "model": "Qwen3-4B Q4_K_M",
+  "task_id": "multi_domain_030",
+  "official_accuracy": 0.0,
+  "unwanted_side_effect": true,
+  "notes": "已保存的 Baseline 轨迹新增 5 封邮件，其中只有 1 封匹配 ground truth。"
+}
