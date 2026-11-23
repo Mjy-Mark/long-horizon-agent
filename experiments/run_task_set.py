@@ -242,13 +242,25 @@ def tool_calls(trace: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def tool_name(call: dict[str, Any]) -> str:
+    return str(call.get("tool", "")).split(".")[-1]
+
+
+def environment_tool_calls(calls: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [call for call in calls if tool_name(call) != "final_answer"]
+
+
+def final_answer_calls(calls: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [call for call in calls if tool_name(call) == "final_answer"]
+
+
+def send_calls(calls: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [call for call in calls if tool_name(call) == "send_email"]
+
+
 def invalid_action_count(task: dict[str, Any], calls: Iterable[dict[str, Any]]) -> int:
     expected = [action["arguments"] for action in task["ground_truth_actions"]]
-    sends = [
-        call.get("arguments", {})
-        for call in calls
-        if str(call.get("tool", "")).split(".")[-1] == "send_email"
-    ]
+    sends = [call.get("arguments", {}) for call in send_calls(calls)]
     return sum(1 for index, send in enumerate(sends) if index >= len(expected) or send != expected[index])
 
 
@@ -263,6 +275,10 @@ def evaluate_run(
         },
     )
     calls = tool_calls(trace)
+    environment_calls = environment_tool_calls(calls)
+    answer_calls = final_answer_calls(calls)
+    email_calls = send_calls(calls)
+    invalid_sends = invalid_action_count(task, calls)
     return {
         "task_id": task["task_id"],
         "method": trace["method"],
@@ -270,7 +286,14 @@ def evaluate_run(
         "verdict": verdict,
         "framework_success": trace.get("success", trace.get("agent_state") == "success"),
         "tool_call_count": len(calls),
-        "invalid_action_count": invalid_action_count(task, calls),
+        "environment_tool_call_count": len(environment_calls),
+        "final_answer_call_count": len(answer_calls),
+        "send_call_count": len(email_calls),
+        "invalid_action_count": invalid_sends,
+        "invalid_send_count": invalid_sends,
+        "unexpected_email_count": verdict["unexpected_email_count"],
+        "duplicate_expected_email_count": verdict["duplicate_expected_email_count"],
+        "extra_email_count": verdict["extra_email_count"],
     }
 
 
@@ -281,17 +304,62 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
         method_records = [record for record in records if record["method"] == method]
         total = len(method_records)
         successes = sum(record["verdict"]["task_success"] for record in method_records)
+        framework_successes = sum(record["framework_success"] for record in method_records)
         unwanted = sum(bool(record["verdict"]["harmful_side_effects"]) for record in method_records)
         tool_calls = sum(record["tool_call_count"] for record in method_records)
+        environment_calls = sum(record["environment_tool_call_count"] for record in method_records)
+        final_answers = sum(record["final_answer_call_count"] for record in method_records)
+        send_calls_total = sum(record["send_call_count"] for record in method_records)
         invalid_actions = sum(record["invalid_action_count"] for record in method_records)
         summary[method] = {
             "task_count": total,
             "task_success_rate": successes / total if total else 0.0,
+            "verifier_task_success_rate": successes / total if total else 0.0,
+            "framework_success_rate": framework_successes / total if total else 0.0,
             "unwanted_side_effect_rate": unwanted / total if total else 0.0,
+            "average_environment_tool_calls": environment_calls / total if total else 0.0,
             "average_tool_calls": tool_calls / total if total else 0.0,
+            "final_answer_calls": final_answers,
+            "send_calls": send_calls_total,
             "invalid_action_rate": invalid_actions / tool_calls if tool_calls else 0.0,
+            "invalid_send_rate": invalid_actions / send_calls_total if send_calls_total else 0.0,
+            "unexpected_email_count": sum(
+                record["unexpected_email_count"] for record in method_records
+            ),
+            "duplicate_expected_email_count": sum(
+                record["duplicate_expected_email_count"] for record in method_records
+            ),
+            "extra_email_count": sum(record["extra_email_count"] for record in method_records),
         }
     return summary
+
+
+def metric_definitions() -> dict[str, str]:
+    return {
+        "average_environment_tool_calls": "environment tool calls excluding final_answer",
+        "average_tool_calls": "all parsed tool calls including final_answer",
+        "invalid_action_rate": "invalid send calls divided by all parsed tool calls",
+        "invalid_send_rate": "invalid send calls divided by all send calls",
+    }
+
+
+def recompute_results(results_path: Path, tasks_path: Path = DEFAULT_TASKS_PATH) -> Path:
+    tasks = {task["task_id"]: task for task in load_tasks(tasks_path)}
+    result = json.loads(results_path.read_text(encoding="utf-8"))
+    records: list[dict[str, Any]] = []
+    for old_record in result["records"]:
+        task = tasks[old_record["task_id"]]
+        trace_path = PROJECT_ROOT / old_record["trace"]
+        trace = json.loads(trace_path.read_text(encoding="utf-8"))
+        records.append(evaluate_run(task, trace, trace_path))
+    result["records"] = records
+    result["summary"] = summarize(records)
+    result["metric_definitions"] = metric_definitions()
+    result["postprocessing_version"] = "metrics_v2"
+    results_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print("[重算结果]", results_path)
+    print(json.dumps(result["summary"], ensure_ascii=False, indent=2))
+    return results_path
 
 
 def run_batch(args: argparse.Namespace) -> Path:
@@ -353,6 +421,8 @@ def run_batch(args: argparse.Namespace) -> Path:
             "max_steps": args.max_steps,
         },
         "ground_truth_exposure": "verifier_only",
+        "metric_definitions": metric_definitions(),
+        "postprocessing_version": "metrics_v2",
         "records": records,
         "summary": summarize(records),
     }
@@ -380,7 +450,17 @@ def main() -> None:
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--max-tokens", type=int, default=256)
     parser.add_argument("--max-steps", type=int, default=6)
-    run_batch(parser.parse_args())
+    parser.add_argument("--recompute-results", type=Path, default=None)
+    args = parser.parse_args()
+    if args.recompute_results is not None:
+        results_path = (
+            args.recompute_results
+            if args.recompute_results.is_absolute()
+            else PROJECT_ROOT / args.recompute_results
+        )
+        recompute_results(results_path, args.tasks if args.tasks.is_absolute() else PROJECT_ROOT / args.tasks)
+    else:
+        run_batch(args)
 
 
 if __name__ == "__main__":

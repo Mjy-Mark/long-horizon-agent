@@ -7,6 +7,7 @@ from experiments.run_task_set import (
     invalid_action_count,
     load_tasks,
     evaluate_run,
+    summarize,
 )
 
 
@@ -77,6 +78,54 @@ class TestTaskSetRunner(unittest.TestCase):
 
         calls = _baseline_tool_calls(trace)
         self.assertEqual(calls[0]["tool"], "send_email")
+
+    def test_summary_separates_environment_and_final_answer_calls(self):
+        task = load_tasks()[0]
+        expected = task["ground_truth_actions"][0]["arguments"]
+        trace = {
+            "method": "baseline_react",
+            "task_id": task["task_id"],
+            "agent_state": "success",
+            "final_state": {
+                "emails_added": [
+                    {
+                        "sender/recipient": expected["recipient"],
+                        "subject": expected["subject"],
+                        "body": expected["body"],
+                    },
+                    {
+                        "sender/recipient": "other@example.com",
+                        "subject": "Other",
+                        "body": "Other",
+                    },
+                    {
+                        "sender/recipient": expected["recipient"],
+                        "subject": expected["subject"],
+                        "body": expected["body"],
+                    },
+                ]
+            },
+            "steps": [
+                {
+                    "tool_calls": [
+                        {"function": {"name": "search_events", "arguments": {}}},
+                        {"function": {"name": "send_email", "arguments": expected}},
+                        {"function": {"name": "send_email", "arguments": {"recipient": "other@example.com"}}},
+                        {"function": {"name": "final_answer", "arguments": {"answer": "done"}}},
+                    ]
+                }
+            ],
+        }
+
+        record = evaluate_run(task, trace, PROJECT_ROOT / "runs/task-set/metrics.json")
+        metrics = summarize([record])["baseline_react"]
+
+        self.assertEqual(record["unexpected_email_count"], 1)
+        self.assertEqual(record["duplicate_expected_email_count"], 1)
+        self.assertEqual(record["extra_email_count"], 2)
+        self.assertEqual(metrics["average_environment_tool_calls"], 3.0)
+        self.assertEqual(metrics["final_answer_calls"], 1)
+        self.assertEqual(metrics["invalid_send_rate"], 0.5)
 
 
 if __name__ == "__main__":

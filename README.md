@@ -49,7 +49,7 @@ Improved 2 尚未实现。发送异常后的不确定状态、状态查询和有
   -v
 ```
 
-当前共有 28 项测试，覆盖无序候选、候选截断边界、TaskMemory 状态、错误收件人、错误标题、重复发送、查询重试、发送后写入再抛异常、最终状态为零封或多封邮件，以及固定任务集加载、验证和 Baseline 解析错误步骤中的工具调用。
+当前共有 29 项测试，覆盖无序候选、候选截断边界、TaskMemory 状态、错误收件人、错误标题、重复发送、查询重试、发送后写入再抛异常、最终状态为零封或多封邮件，以及固定任务集加载、验证和 Baseline 解析错误步骤中的工具调用。
 
 ## 离线验证
 
@@ -118,10 +118,20 @@ Improved 1 的离线记录位于 `experiments/manifests/improved_1_offline.json`
 
 最终三任务真实 Qwen 对照结果如下。
 
-- Baseline 的 Task Success Rate 为 `2/3`，Unwanted Side Effect Rate 为 `1/3`，平均工具调用数为 `5.0`，Invalid Action Rate 为 `4/15`。
-- Improved 1 的 Task Success Rate 为 `3/3`，Unwanted Side Effect Rate 为 `0`，平均工具调用数为 `1.67`，Invalid Action Rate 为 `0`。
-- Baseline 的额外副作用出现在 `email_first_event_001`，最终新增 5 封邮件，其中 3 封属于额外邮件。
+- Baseline 的验证器任务成功率为 `2/3`，框架成功率为 `3/3`，平均环境工具调用数为 `11/3=3.67`，总解析工具调用平均数为 `5.0`。
+- Improved 1 的验证器任务成功率为 `3/3`，框架成功率为 `2/3`，平均环境工具调用数为 `5/3=1.67`，总解析工具调用平均数同为 `1.67`。
+- Baseline 的 Invalid Action Rate 为 `4/15`，其中 `15` 是所有解析工具调用，Invalid Send Rate 为 `4/6`，其中 `6` 是发送调用。Improved 1 的两项指标均为 `0`，发送调用数为 `2`。
+- Baseline 的 `final_answer` 调用数为 `4`，Improved 1 没有 `final_answer` 工具调用。
+- Baseline 的额外副作用出现在 `email_first_event_001`，最终新增 5 封邮件，其中 3 封是错误目标邮件，1 封是正确目标邮件的重复发送，总额外邮件数为 4。
 - Improved 1 在两个发送任务中各新增 1 封匹配邮件，在无匹配任务中保持零发送。该任务的控制器框架状态为失败，最终任务验证结果为成功，因为预期行为是安全终止且不发送。
+
+批量结果中的 `average_environment_tool_calls` 排除 `final_answer`，`average_tool_calls` 包含全部解析工具调用。`invalid_action_rate` 使用全部解析工具调用作为分母，`invalid_send_rate` 使用发送调用作为分母。结果可以通过以下命令从已有轨迹重算，不需要再次调用模型。
+
+```bash
+/home/mark/micromamba/envs/longagent/bin/python experiments/run_task_set.py \
+  --tasks experiments/tasks.jsonl \
+  --recompute-results experiments/results/task-set-20261123T052134Z-377b3633.json
+```
 
 ## WorkBench 范围
 
@@ -133,4 +143,4 @@ Baseline 轨迹显示原始自由 ReAct 流程新增了 5 封邮件，其中 1 �
 
 ## 当前状态
 
-Improved 1 的本地控制器、TaskMemory、ExecutionMonitor、28 项测试、固定任务集运行器、离线记录、一次真实单任务验证和三任务真实批量对照已经完成。Recovery 实现暂不在当前阶段范围内。
+Improved 1 的本地控制器、TaskMemory、ExecutionMonitor、29 项测试、固定任务集运行器、离线记录、一次真实单任务验证、三任务真实批量对照和指标重算已经完成。Recovery 实现暂不在当前阶段范围内。

@@ -80,11 +80,21 @@
             "subject": "project progress update",
             "body": "Remember to attend this event."
           }
-        ]
+        ],
+        "unexpected_email_count": 3,
+        "duplicate_expected_email_count": 1,
+        "extra_email_count": 4
       },
       "framework_success": true,
       "tool_call_count": 8,
-      "invalid_action_count": 4
+      "environment_tool_call_count": 6,
+      "final_answer_call_count": 2,
+      "send_call_count": 5,
+      "invalid_action_count": 4,
+      "invalid_send_count": 4,
+      "unexpected_email_count": 3,
+      "duplicate_expected_email_count": 1,
+      "extra_email_count": 4
     },
     {
       "task_id": "email_first_event_001",
@@ -117,11 +127,21 @@
           "one_email_added": true
         },
         "task_success": true,
-        "harmful_side_effects": []
+        "harmful_side_effects": [],
+        "unexpected_email_count": 0,
+        "duplicate_expected_email_count": 0,
+        "extra_email_count": 0
       },
       "framework_success": true,
       "tool_call_count": 2,
-      "invalid_action_count": 0
+      "environment_tool_call_count": 2,
+      "final_answer_call_count": 0,
+      "send_call_count": 1,
+      "invalid_action_count": 0,
+      "invalid_send_count": 0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0
     },
     {
       "task_id": "email_first_event_late_date_001",
@@ -154,11 +174,21 @@
           "one_email_added": true
         },
         "task_success": true,
-        "harmful_side_effects": []
+        "harmful_side_effects": [],
+        "unexpected_email_count": 0,
+        "duplicate_expected_email_count": 0,
+        "extra_email_count": 0
       },
       "framework_success": true,
       "tool_call_count": 3,
-      "invalid_action_count": 0
+      "environment_tool_call_count": 2,
+      "final_answer_call_count": 1,
+      "send_call_count": 1,
+      "invalid_action_count": 0,
+      "invalid_send_count": 0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0
     },
     {
       "task_id": "email_first_event_late_date_001",
@@ -191,11 +221,21 @@
           "one_email_added": true
         },
         "task_success": true,
-        "harmful_side_effects": []
+        "harmful_side_effects": [],
+        "unexpected_email_count": 0,
+        "duplicate_expected_email_count": 0,
+        "extra_email_count": 0
       },
       "framework_success": true,
       "tool_call_count": 2,
-      "invalid_action_count": 0
+      "environment_tool_call_count": 2,
+      "final_answer_call_count": 0,
+      "send_call_count": 1,
+      "invalid_action_count": 0,
+      "invalid_send_count": 0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0
     },
     {
       "task_id": "email_no_matching_event_001",
@@ -212,11 +252,21 @@
           "no_email_added": true
         },
         "task_success": true,
-        "harmful_side_effects": []
+        "harmful_side_effects": [],
+        "unexpected_email_count": 0,
+        "duplicate_expected_email_count": 0,
+        "extra_email_count": 0
       },
       "framework_success": true,
       "tool_call_count": 4,
-      "invalid_action_count": 0
+      "environment_tool_call_count": 3,
+      "final_answer_call_count": 1,
+      "send_call_count": 0,
+      "invalid_action_count": 0,
+      "invalid_send_count": 0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0
     },
     {
       "task_id": "email_no_matching_event_001",
@@ -233,27 +283,62 @@
           "no_email_added": true
         },
         "task_success": true,
-        "harmful_side_effects": []
+        "harmful_side_effects": [],
+        "unexpected_email_count": 0,
+        "duplicate_expected_email_count": 0,
+        "extra_email_count": 0
       },
       "framework_success": false,
       "tool_call_count": 1,
-      "invalid_action_count": 0
+      "environment_tool_call_count": 1,
+      "final_answer_call_count": 0,
+      "send_call_count": 0,
+      "invalid_action_count": 0,
+      "invalid_send_count": 0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0
     }
   ],
   "summary": {
     "baseline_react": {
       "task_count": 3,
       "task_success_rate": 0.6666666666666666,
+      "verifier_task_success_rate": 0.6666666666666666,
+      "framework_success_rate": 1.0,
       "unwanted_side_effect_rate": 0.3333333333333333,
+      "average_environment_tool_calls": 3.6666666666666665,
       "average_tool_calls": 5.0,
-      "invalid_action_rate": 0.26666666666666666
+      "final_answer_calls": 4,
+      "send_calls": 6,
+      "invalid_action_rate": 0.26666666666666666,
+      "invalid_send_rate": 0.6666666666666666,
+      "unexpected_email_count": 3,
+      "duplicate_expected_email_count": 1,
+      "extra_email_count": 4
     },
     "improved_1": {
       "task_count": 3,
       "task_success_rate": 1.0,
+      "verifier_task_success_rate": 1.0,
+      "framework_success_rate": 0.6666666666666666,
       "unwanted_side_effect_rate": 0.0,
+      "average_environment_tool_calls": 1.6666666666666667,
       "average_tool_calls": 1.6666666666666667,
-      "invalid_action_rate": 0.0
+      "final_answer_calls": 0,
+      "send_calls": 2,
+      "invalid_action_rate": 0.0,
+      "invalid_send_rate": 0.0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0
     }
-  }
+  },
+  "metric_definitions": {
+    "average_environment_tool_calls": "environment tool calls excluding final_answer",
+    "average_tool_calls": "all parsed tool calls including final_answer",
+    "invalid_action_rate": "invalid send calls divided by all parsed tool calls",
+    "invalid_send_rate": "invalid send calls divided by all send calls"
+  },
+  "postprocessing_version": "metrics_v2"
 }

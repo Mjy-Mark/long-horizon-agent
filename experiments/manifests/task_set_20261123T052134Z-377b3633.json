@@ -4,7 +4,10 @@
   "task_file": "experiments/tasks.jsonl",
   "results": "experiments/results/task-set-20261123T052134Z-377b3633.json",
   "trace_directory": "runs/task-set/20261123T052134Z-377b3633",
-  "methods": ["baseline_react", "improved_1"],
+  "methods": [
+    "baseline_react",
+    "improved_1"
+  ],
   "task_count": 3,
   "model_used": true,
   "model_id": "longagent-qwen",
@@ -22,17 +25,45 @@
   "initial_state_source": "benchmarks/workbench_subset",
   "summary": {
     "baseline_react": {
+      "task_count": 3,
       "task_success_rate": 0.6666666666666666,
+      "verifier_task_success_rate": 0.6666666666666666,
+      "framework_success_rate": 1.0,
       "unwanted_side_effect_rate": 0.3333333333333333,
+      "average_environment_tool_calls": 3.6666666666666665,
       "average_tool_calls": 5.0,
-      "invalid_action_rate": 0.26666666666666666
+      "final_answer_calls": 4,
+      "send_calls": 6,
+      "invalid_action_rate": 0.26666666666666666,
+      "invalid_send_rate": 0.6666666666666666,
+      "unexpected_email_count": 3,
+      "duplicate_expected_email_count": 1,
+      "extra_email_count": 4
     },
     "improved_1": {
+      "task_count": 3,
       "task_success_rate": 1.0,
+      "verifier_task_success_rate": 1.0,
+      "framework_success_rate": 0.6666666666666666,
       "unwanted_side_effect_rate": 0.0,
+      "average_environment_tool_calls": 1.6666666666666667,
       "average_tool_calls": 1.6666666666666667,
-      "invalid_action_rate": 0.0
+      "final_answer_calls": 0,
+      "send_calls": 2,
+      "invalid_action_rate": 0.0,
+      "invalid_send_rate": 0.0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0
     }
   },
-  "notes": "每个方法和任务使用独立 fresh_workbench_subset 副本，ground_truth_actions 只在验证阶段读取。"
+  "notes": "每个方法和任务使用独立 fresh_workbench_subset 副本，ground_truth_actions 只在验证阶段读取。",
+  "test_count": 29,
+  "postprocessing_version": "metrics_v2",
+  "metric_definitions": {
+    "average_environment_tool_calls": "environment tool calls excluding final_answer",
+    "average_tool_calls": "all parsed tool calls including final_answer",
+    "invalid_action_rate": "invalid send calls divided by all parsed tool calls",
+    "invalid_send_rate": "invalid send calls divided by all send calls"
+  }
 }

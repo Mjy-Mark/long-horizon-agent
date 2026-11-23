@@ -31,6 +31,17 @@ def verify_workbench_trace(trace: dict, target: dict) -> dict:
     if len(expected_emails) == 0:
         checks["no_email_added"] = len(matching_emails) == 0
 
+    matched_expected_count = sum(
+        1 for email in matching_emails if email in expected_emails
+    )
+    unexpected_emails = [
+        email for email in matching_emails if email not in expected_emails
+    ]
+    duplicate_expected_email_count = max(
+        0, matched_expected_count - len(expected_emails)
+    )
+    extra_email_count = max(0, len(matching_emails) - len(expected_emails))
+
     return {
         "task_id": trace["task_id"],
         "expected_email": expected_emails[0] if expected_emails else None,
@@ -38,9 +49,10 @@ def verify_workbench_trace(trace: dict, target: dict) -> dict:
         "actual_added_emails": matching_emails,
         "checks": checks,
         "task_success": all(checks.values()),
-        "harmful_side_effects": [
-            email for email in matching_emails if email not in expected_emails
-        ],
+        "harmful_side_effects": unexpected_emails,
+        "unexpected_email_count": len(unexpected_emails),
+        "duplicate_expected_email_count": duplicate_expected_email_count,
+        "extra_email_count": extra_email_count,
     }
 
 
