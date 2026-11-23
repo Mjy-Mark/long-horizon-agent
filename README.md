@@ -35,6 +35,7 @@ Improved 2 尚未实现。发送异常后的不确定状态、状态查询和有
 - `planning_memory.py` 保存事件选择器和 `TaskMemory`。
 - `execution_monitor.py` 保存发送指纹、参数检查和单次发送保护。
 - `verify_workbench_subset.py` 根据最终邮箱状态验证任务结果。
+- `experiments/run_task_set.py` 为固定任务集创建独立数据副本并运行 Baseline 与 Improved 1。
 - `snapshots/baseline/` 保存 Baseline 文件、轨迹和 Git 状态。
 
 ## 本地测试
@@ -48,7 +49,7 @@ Improved 2 尚未实现。发送异常后的不确定状态、状态查询和有
   -v
 ```
 
-当前共有 24 项测试，覆盖无序候选、候选截断边界、TaskMemory 状态、错误收件人、错误标题、重复发送、查询重试、发送后写入再抛异常，以及最终状态为零封或多封邮件的情况。
+当前共有 28 项测试，覆盖无序候选、候选截断边界、TaskMemory 状态、错误收件人、错误标题、重复发送、查询重试、发送后写入再抛异常、最终状态为零封或多封邮件，以及固定任务集加载、验证和 Baseline 解析错误步骤中的工具调用。
 
 ## 离线验证
 
@@ -105,7 +106,22 @@ Improved 1 的离线记录位于 `experiments/manifests/improved_1_offline.json`
 - `email_first_event_late_date_001` 验证 2023-12-21 的首事件发送。
 - `email_no_matching_event_001` 验证没有匹配活动时不发送邮件。
 
-每条任务都定义了 `target_date`、期望行为、期望事件、ground truth 动作和 `fresh_workbench_subset` 初始状态。Baseline 与 Improved 1 的重复对照应使用同一任务行、同一初始数据副本、同一模型配置和同一验证器。当前入口已完成首条任务的真实 Qwen 验证，其余任务作为下一轮固定批次使用。
+每条任务都定义了 `target_date`、期望行为、期望事件、ground truth 动作和 `fresh_workbench_subset` 初始状态。运行器每次将 `benchmarks/workbench_subset/` 复制到临时目录，记录日历和邮件 CSV 的 SHA-256，只把 `instruction` 传给 Agent 或 Planner，最后才读取 ground truth 进行验证。
+
+在本地 `llama-server` 就绪后运行固定对照。
+
+```bash
+/home/mark/micromamba/envs/longagent/bin/python experiments/run_task_set.py
+```
+
+每个方法和任务都会生成独立轨迹，批量结果写入 `experiments/results/task-set-<batch_id>.json`，汇总 manifest 位于 `experiments/manifests/task_set_20261123T052134Z-377b3633.json`。
+
+最终三任务真实 Qwen 对照结果如下。
+
+- Baseline 的 Task Success Rate 为 `2/3`，Unwanted Side Effect Rate 为 `1/3`，平均工具调用数为 `5.0`，Invalid Action Rate 为 `4/15`。
+- Improved 1 的 Task Success Rate 为 `3/3`，Unwanted Side Effect Rate 为 `0`，平均工具调用数为 `1.67`，Invalid Action Rate 为 `0`。
+- Baseline 的额外副作用出现在 `email_first_event_001`，最终新增 5 封邮件，其中 3 封属于额外邮件。
+- Improved 1 在两个发送任务中各新增 1 封匹配邮件，在无匹配任务中保持零发送。该任务的控制器框架状态为失败，最终任务验证结果为成功，因为预期行为是安全终止且不发送。
 
 ## WorkBench 范围
 
@@ -117,4 +133,4 @@ Baseline 轨迹显示原始自由 ReAct 流程新增了 5 封邮件，其中 1 �
 
 ## 当前状态
 
-Improved 1 的本地控制器、TaskMemory、ExecutionMonitor、测试、离线记录和一次真实 Qwen 验证已经完成。Recovery 实现暂不在当前阶段范围内。
+Improved 1 的本地控制器、TaskMemory、ExecutionMonitor、28 项测试、固定任务集运行器、离线记录、一次真实单任务验证和三任务真实批量对照已经完成。Recovery 实现暂不在当前阶段范围内。

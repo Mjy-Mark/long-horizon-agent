@@ -1,0 +1,38 @@
+{
+  "status": "real_qwen_batch_validation",
+  "batch_id": "20261123T052134Z-377b3633",
+  "task_file": "experiments/tasks.jsonl",
+  "results": "experiments/results/task-set-20261123T052134Z-377b3633.json",
+  "trace_directory": "runs/task-set/20261123T052134Z-377b3633",
+  "methods": ["baseline_react", "improved_1"],
+  "task_count": 3,
+  "model_used": true,
+  "model_id": "longagent-qwen",
+  "model_file": ".runtime/Qwen3-4B-Q4_K_M.gguf",
+  "model_quantization": "Q4_K_M",
+  "llama_cpp_build": "b12534",
+  "smolagents_version": "1.26.0",
+  "generation_config": {
+    "temperature": 0,
+    "max_tokens": 256,
+    "max_steps": 6
+  },
+  "code_commit": "fc06d7f80b6f8d379a8f2bcc6c1a7e8c52600d8c",
+  "code_worktree_dirty_at_run": true,
+  "initial_state_source": "benchmarks/workbench_subset",
+  "summary": {
+    "baseline_react": {
+      "task_success_rate": 0.6666666666666666,
+      "unwanted_side_effect_rate": 0.3333333333333333,
+      "average_tool_calls": 5.0,
+      "invalid_action_rate": 0.26666666666666666
+    },
+    "improved_1": {
+      "task_success_rate": 1.0,
+      "unwanted_side_effect_rate": 0.0,
+      "average_tool_calls": 1.6666666666666667,
+      "invalid_action_rate": 0.0
+    }
+  },
+  "notes": "每个方法和任务使用独立 fresh_workbench_subset 副本，ground_truth_actions 只在验证阶段读取。"
+}

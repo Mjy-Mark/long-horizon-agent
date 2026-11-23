@@ -4,9 +4,13 @@ from pathlib import Path
 
 
 def verify_workbench_trace(trace: dict, target: dict) -> dict:
-    """按选定 WorkBench 任务的最终状态检查新增邮件是否唯一且准确。"""
-    expected = target["ground_truth_actions"]
-    expected_email = expected[0]["arguments"]
+    """按任务的 ground truth 检查最终新增邮件。
+
+    发送任务要求一封完全匹配的邮件，无匹配活动任务要求零封邮件。
+    """
+
+    expected = target.get("ground_truth_actions", [])
+    expected_emails = [action["arguments"] for action in expected]
     added_emails = trace["final_state"]["emails_added"]
 
     matching_emails = [
@@ -19,17 +23,23 @@ def verify_workbench_trace(trace: dict, target: dict) -> dict:
     ]
 
     checks = {
-        "one_email_added": len(matching_emails) == 1,
-        "email_matches_ground_truth": matching_emails == [expected_email],
+        "email_count_matches": len(matching_emails) == len(expected_emails),
+        "email_matches_ground_truth": matching_emails == expected_emails,
     }
+    if len(expected_emails) == 1:
+        checks["one_email_added"] = len(matching_emails) == 1
+    if len(expected_emails) == 0:
+        checks["no_email_added"] = len(matching_emails) == 0
+
     return {
         "task_id": trace["task_id"],
-        "expected_email": expected_email,
+        "expected_email": expected_emails[0] if expected_emails else None,
+        "expected_emails": expected_emails,
         "actual_added_emails": matching_emails,
         "checks": checks,
         "task_success": all(checks.values()),
         "harmful_side_effects": [
-            email for email in matching_emails if email != expected_email
+            email for email in matching_emails if email not in expected_emails
         ],
     }
 
