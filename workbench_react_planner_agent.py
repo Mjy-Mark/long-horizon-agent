@@ -139,6 +139,34 @@ def extract_task_body(task: str) -> str:
     raise ReactPlanError("任务中没有找到邮件正文")
 
 
+def extract_task_date(task: str) -> str | None:
+    iso_match = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", task)
+    if iso_match:
+        return iso_match.group(1)
+    months = {
+        "january": 1,
+        "february": 2,
+        "march": 3,
+        "april": 4,
+        "may": 5,
+        "june": 6,
+        "july": 7,
+        "august": 8,
+        "september": 9,
+        "october": 10,
+        "november": 11,
+        "december": 12,
+    }
+    match = re.search(
+        r"\b(" + "|".join(months) + r")\s+(\d{1,2})\b",
+        task,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    return date(2023, months[match.group(1).lower()], int(match.group(2))).isoformat()
+
+
 class ProgressMonitor:
     """Environment-aware progress and side-effect monitor."""
 
@@ -148,11 +176,15 @@ class ProgressMonitor:
         execution_monitor: ExecutionMonitor,
         all_events_fn: Callable[[], Iterable[dict[str, Any]]],
         initial_sent_emails: Iterable[dict[str, Any]] = (),
+        required_body: str | None = None,
+        required_date: str | None = None,
     ) -> None:
         self.memory = memory
         self.execution_monitor = execution_monitor
         self.all_events_fn = all_events_fn
         self.initial_sent_emails = [deepcopy(row) for row in initial_sent_emails]
+        self.required_body = required_body
+        self.required_date = required_date
         self.decisions: list[dict[str, Any]] = []
 
     def _record(self, allowed: bool, reason: str, details: Any = None) -> None:
@@ -189,6 +221,8 @@ class ProgressMonitor:
             return self.block("event_id_not_in_recent_search", {"event_id": event_id})
         if not self.memory.target_date:
             return self.block("target_date_missing")
+        if self.required_date and self.memory.target_date != self.required_date:
+            return self.block("selected_event_task_date_mismatch")
         try:
             selected_date = datetime.fromisoformat(candidate["event_start"].replace("Z", "+00:00")).date()
         except (KeyError, TypeError, ValueError):
@@ -233,6 +267,12 @@ class ProgressMonitor:
             return self.block("candidate_set_incomplete_before_send")
         if body != plan.get("email_body"):
             return self.block("email_body_does_not_match_plan")
+        if self.required_body and plan.get("email_body") != self.required_body:
+            return self.block("planner_body_does_not_match_task")
+        if self.required_body and body != self.required_body:
+            return self.block("email_body_does_not_match_task")
+        if self.required_date and self.memory.target_date != self.required_date:
+            return self.block("planner_date_does_not_match_task")
         environment_event = self._environment_event(str(event["event_id"]))
         if environment_event is None:
             return self.block("target_event_missing_from_environment")
@@ -279,6 +319,7 @@ class ReactPlannerController:
         list_sent_emails_fn: Callable[[], Iterable[dict[str, Any]]],
         state_snapshot_fn: Callable[[], dict[str, Any]],
         model: Any | None = None,
+        max_steps: int = 8,
     ) -> None:
         self.task_id = task_id
         self.task = task
@@ -288,6 +329,12 @@ class ReactPlannerController:
         self.list_sent_emails_fn = list_sent_emails_fn
         self.state_snapshot_fn = state_snapshot_fn
         self.model = model
+        self.max_steps = max_steps
+        try:
+            self.task_required_body = extract_task_body(task)
+        except ReactPlanError:
+            self.task_required_body = None
+        self.task_required_date = extract_task_date(task)
         self.memory = TaskMemory(task_id=task_id)
         self.execution_monitor = ExecutionMonitor()
         self._initial_sent = [deepcopy(row) for row in list_sent_emails_fn()]
@@ -296,6 +343,8 @@ class ReactPlannerController:
             self.execution_monitor,
             all_events_fn,
             self._initial_sent,
+            self.task_required_body,
+            self.task_required_date,
         )
         self.tool_calls: list[dict[str, Any]] = []
         self.tool_observations: list[dict[str, Any]] = []
@@ -311,9 +360,15 @@ class ReactPlannerController:
         self,
         candidates: list[dict[str, Any]],
         query: str,
+        time_min: str | None,
+        time_max: str | None,
     ) -> tuple[str, str]:
         if not self.memory.target_date:
             return "incomplete", "target_date_not_set"
+        expected_min = f"{self.memory.target_date} 00:00:00"
+        expected_max = f"{self.memory.target_date} 23:59:59"
+        if time_min != expected_min or time_max != expected_max:
+            return "incomplete", "search_time_window_missing_or_mismatched"
         try:
             all_target_events = [
                 event
@@ -335,18 +390,33 @@ class ReactPlannerController:
             return "incomplete", "returned_event_ids_do_not_cover_environment_events"
         return "complete", "returned_ids_match_environment_events"
 
-    def search_events(self, query: str = "", time_min: str | None = None, time_max: str | None = None) -> str:
+    def search_events(
+        self,
+        query: str = "",
+        time_min: str | None = None,
+        time_max: str | None = None,
+    ) -> str:
         arguments = {"query": query, "time_min": time_min, "time_max": time_max}
         try:
             result = self.search_events_fn(**arguments)
             candidates = json.loads(result)
             if not isinstance(candidates, list):
                 raise ValueError("search_events 返回结构不是列表")
-            completeness, reason = self._candidate_completeness(candidates, query)
+            completeness, reason = self._candidate_completeness(
+                candidates, query, time_min, time_max
+            )
+            observation = {
+                "events": candidates,
+                "returned_count": len(candidates),
+                "candidate_completeness": completeness,
+                "completeness_reason": reason,
+            }
             self.memory.record_search_result(candidates, completeness, reason)
             if not candidates and completeness == "complete":
                 self.memory.mark_completed_without_action(reason)
-            return self._record_tool("search_events", arguments, result)
+            return self._record_tool(
+                "search_events", arguments, json.dumps(observation, ensure_ascii=False)
+            )
         except Exception as exc:
             self.memory.mark_failed({"tool": "search_events", "error": str(exc)})
             result = json.dumps({"ok": False, "code": "search_failed", "error": str(exc)})
@@ -422,6 +492,16 @@ class ReactPlannerController:
                 planner_output = generate_react_plan(self.model, self.task)
             else:
                 planner_output = parse_react_plan(plan)
+            if (
+                self.task_required_body
+                and planner_output["email_body"] != self.task_required_body
+            ):
+                raise ReactPlanError("Planner email_body 与用户任务不一致")
+            if (
+                self.task_required_date
+                and planner_output["target_date"] != self.task_required_date
+            ):
+                raise ReactPlanError("Planner target_date 与用户任务不一致")
             self.memory.set_plan(planner_output)
         except (ReactPlanError, TaskMemoryError) as exc:
             self.memory.mark_failed({"type": type(exc).__name__, "message": str(exc)})
@@ -430,7 +510,7 @@ class ReactPlannerController:
         agent = ToolCallingAgent(
             model=self.model,
             tools=self._tools(),
-            max_steps=8,
+            max_steps=self.max_steps,
         )
         agent.prompt_templates["system_prompt"] = (
             "你是 Planner-Guided ReAct Executor。先使用 search_events 获取事实，"

@@ -186,6 +186,7 @@ def run_improved_1(
     api_base: str,
     temperature: float,
     max_tokens: int,
+    max_steps: int,
     batch_id: str,
 ) -> dict[str, Any]:
     state = WorkbenchSubsetState(workbench_root)
@@ -198,6 +199,7 @@ def run_improved_1(
         list_sent_emails_fn=lambda: [row.copy() for row in state.emails],
         state_snapshot_fn=state.snapshot,
         model=model,
+        max_steps=max_steps,
     )
     trace = controller.run()
     trace.update(
@@ -223,6 +225,7 @@ def run_improved_1_react(
     api_base: str,
     temperature: float,
     max_tokens: int,
+    max_steps: int,
     batch_id: str,
 ) -> dict[str, Any]:
     state = WorkbenchSubsetState(workbench_root)
@@ -236,6 +239,7 @@ def run_improved_1_react(
         list_sent_emails_fn=lambda: [row.copy() for row in state.emails],
         state_snapshot_fn=state.snapshot,
         model=model,
+        max_steps=max_steps,
     )
     trace = controller.run()
     trace.update(
@@ -463,6 +467,7 @@ def run_batch(args: argparse.Namespace) -> Path:
                         api_base=args.api_base,
                         temperature=args.temperature,
                         max_tokens=args.max_tokens,
+                        max_steps=args.max_steps,
                         batch_id=batch_id,
                     )
                     trace["method"] = "additional_baseline_deterministic"
@@ -476,6 +481,7 @@ def run_batch(args: argparse.Namespace) -> Path:
                         api_base=args.api_base,
                         temperature=args.temperature,
                         max_tokens=args.max_tokens,
+                        max_steps=args.max_steps,
                         batch_id=batch_id,
                     )
             records.append(evaluate_run(task, trace, trace_path))
@@ -505,7 +511,9 @@ def run_batch(args: argparse.Namespace) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="运行固定 WorkBench 任务集的 Baseline 与 Improved 1 对照")
+    parser = argparse.ArgumentParser(
+        description="运行固定 WorkBench 任务集的 Baseline、Additional Baseline 与 improved_1_react 对照"
+    )
     parser.add_argument("--tasks", type=Path, default=DEFAULT_TASKS_PATH)
     parser.add_argument(
         "--methods",

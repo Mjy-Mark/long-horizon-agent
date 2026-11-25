@@ -63,6 +63,14 @@ def make_controller(environment, search_events_fn=None):
     )
 
 
+def search_complete(controller):
+    return controller.search_events(
+        query="",
+        time_min="2023-11-30 00:00:00",
+        time_max="2023-11-30 23:59:59",
+    )
+
+
 class TestReactPlannerAgent(unittest.TestCase):
     def test_valid_plan_is_parsed(self):
         self.assertEqual(parse_react_plan(json.dumps(PLAN)), PLAN)
@@ -74,6 +82,34 @@ class TestReactPlannerAgent(unittest.TestCase):
         controller = make_controller(environment)
 
         trace = controller.run("not json")
+
+        self.assertEqual(trace["terminal_status"], "failed")
+        self.assertEqual(environment.emails, [])
+
+    def test_planner_body_must_match_user_task(self):
+        environment = FakeEnvironment()
+        controller = ReactPlannerController(
+            task_id="react-task",
+            task="Send the reminder on November 30 and tell them 'Remember to attend this event.'",
+            search_events_fn=environment.search_events,
+            send_email_fn=environment.send_email,
+            all_events_fn=lambda: [row.copy() for row in environment.events],
+            list_sent_emails_fn=lambda: [row.copy() for row in environment.emails],
+            state_snapshot_fn=environment.snapshot,
+        )
+        bad_plan = {**PLAN, "email_body": "Wrong body"}
+
+        trace = controller.run(bad_plan)
+
+        self.assertEqual(trace["terminal_status"], "failed")
+        self.assertEqual(environment.emails, [])
+
+    def test_planner_date_must_match_user_task(self):
+        environment = FakeEnvironment()
+        controller = make_controller(environment)
+        bad_plan = {**PLAN, "target_date": "2023-12-21"}
+
+        trace = controller.run(bad_plan)
 
         self.assertEqual(trace["terminal_status"], "failed")
         self.assertEqual(environment.emails, [])
@@ -97,7 +133,7 @@ class TestReactPlannerAgent(unittest.TestCase):
         environment = FakeEnvironment()
         controller = make_controller(environment)
         controller.memory.set_plan(PLAN)
-        controller.search_events()
+        search_complete(controller)
 
         result = json.loads(controller.select_event("002"))
 
@@ -120,7 +156,7 @@ class TestReactPlannerAgent(unittest.TestCase):
         environment = FakeEnvironment()
         controller = make_controller(environment)
         controller.memory.set_plan(PLAN)
-        controller.search_events()
+        search_complete(controller)
         controller.select_event("001")
 
         result = json.loads(
@@ -134,7 +170,7 @@ class TestReactPlannerAgent(unittest.TestCase):
         environment = FakeEnvironment()
         controller = make_controller(environment)
         controller.memory.set_plan(PLAN)
-        controller.search_events()
+        search_complete(controller)
         controller.select_event("001")
         controller.send_email("a@example.com", "Morning Meeting", PLAN["email_body"])
 
@@ -149,7 +185,7 @@ class TestReactPlannerAgent(unittest.TestCase):
         environment = FakeEnvironment(events=[])
         controller = make_controller(environment)
         controller.memory.set_plan(PLAN)
-        controller.search_events()
+        search_complete(controller)
 
         self.assertEqual(controller.memory.status, "completed_without_action")
         self.assertEqual(environment.emails, [])
@@ -170,7 +206,7 @@ class TestReactPlannerAgent(unittest.TestCase):
             search_events_fn=lambda **_arguments: json.dumps(events[:5]),
         )
         controller.memory.set_plan(PLAN)
-        controller.search_events()
+        search_complete(controller)
 
         result = json.loads(controller.select_event("001"))
         self.assertFalse(result["ok"])
@@ -181,7 +217,7 @@ class TestReactPlannerAgent(unittest.TestCase):
         environment = FakeEnvironment()
         controller = make_controller(environment)
         controller.memory.set_plan(PLAN)
-        controller.search_events()
+        search_complete(controller)
         controller.select_event("001")
         controller.send_email("a@example.com", "Morning Meeting", PLAN["email_body"])
 
