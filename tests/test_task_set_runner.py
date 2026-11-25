@@ -4,6 +4,7 @@ from pathlib import Path
 from experiments.run_task_set import (
     PROJECT_ROOT,
     _baseline_tool_calls,
+    _react_tool_calls,
     invalid_action_count,
     load_tasks,
     evaluate_run,
@@ -78,6 +79,42 @@ class TestTaskSetRunner(unittest.TestCase):
 
         calls = _baseline_tool_calls(trace)
         self.assertEqual(calls[0]["tool"], "send_email")
+
+    def test_react_parser_counts_final_answer_from_react_steps(self):
+        trace = {
+            "method": "improved_1_react",
+            "react_steps": [
+                {
+                    "tool_calls": [
+                        {"function": {"name": "search_events", "arguments": {}}},
+                        {"function": {"name": "select_event", "arguments": {"event_id": "001"}}},
+                    ]
+                },
+                {
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "name": "send_email",
+                                "arguments": {"recipient": "a@example.com"},
+                            }
+                        },
+                        {"function": {"name": "final_answer", "arguments": {"answer": "done"}}},
+                    ]
+                },
+            ],
+            "tool_calls": [
+                {"tool": "search_events", "arguments": {}},
+                {"tool": "select_event", "arguments": {"event_id": "001"}},
+                {"tool": "send_email", "arguments": {"recipient": "a@example.com"}},
+            ],
+        }
+
+        calls = _react_tool_calls(trace)
+
+        self.assertEqual(
+            [call["tool"] for call in calls],
+            ["search_events", "select_event", "send_email", "final_answer"],
+        )
 
     def test_summary_separates_environment_and_final_answer_calls(self):
         task = load_tasks()[0]

@@ -256,9 +256,9 @@ def run_improved_1_react(
     return trace
 
 
-def _baseline_tool_calls(trace: dict[str, Any]) -> list[dict[str, Any]]:
+def _tool_calls_from_steps(steps: Iterable[Any]) -> list[dict[str, Any]]:
     calls: list[dict[str, Any]] = []
-    for step in trace.get("steps", []):
+    for step in steps:
         if not isinstance(step, dict):
             continue
         step_calls = step.get("tool_calls", []) or []
@@ -276,9 +276,27 @@ def _baseline_tool_calls(trace: dict[str, Any]) -> list[dict[str, Any]]:
     return calls
 
 
+def _baseline_tool_calls(trace: dict[str, Any]) -> list[dict[str, Any]]:
+    return _tool_calls_from_steps(trace.get("steps", []))
+
+
+def _react_tool_calls(trace: dict[str, Any]) -> list[dict[str, Any]]:
+    """Parse ReAct calls, including final_answer from the agent step trace."""
+
+    calls = _tool_calls_from_steps(trace.get("react_steps", []))
+    if calls:
+        return calls
+    return [
+        {"tool": call.get("tool"), "arguments": call.get("arguments", {})}
+        for call in trace.get("tool_calls", [])
+    ]
+
+
 def tool_calls(trace: dict[str, Any]) -> list[dict[str, Any]]:
     if trace.get("method") == "baseline_react":
         return _baseline_tool_calls(trace)
+    if trace.get("method") == "improved_1_react":
+        return _react_tool_calls(trace)
     return [
         {"tool": call.get("tool"), "arguments": call.get("arguments", {})}
         for call in trace.get("tool_calls", [])

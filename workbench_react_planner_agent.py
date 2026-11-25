@@ -246,8 +246,12 @@ class ProgressMonitor:
         environment_event = self._environment_event(str(event_id))
         if environment_event is None:
             return self.block("selected_event_missing_from_environment", {"event_id": event_id})
-        if environment_event.get("participant_email") != candidate.get("participant_email"):
-            return self.block("selected_event_environment_mismatch", {"event_id": event_id})
+        for field in ("event_name", "participant_email", "event_start"):
+            if environment_event.get(field) != candidate.get(field):
+                return self.block(
+                    "selected_event_environment_mismatch",
+                    {"event_id": event_id, "field": field},
+                )
         self.memory.set_target_event(candidate)
         self._record(True, "event_selected", {"event_id": event_id})
         return {"ok": True, "event": deepcopy(candidate)}
@@ -585,6 +589,7 @@ class ReactPlannerController:
             "candidate_completeness": self.memory.candidate_completeness,
             "returned_count": self.memory.returned_count,
             "completeness_reason": self.memory.completeness_reason,
+            "max_steps": self.max_steps,
             "initial_state": deepcopy(self.initial_state),
             "final_state": deepcopy(self.state_snapshot_fn()),
             "agent_state": agent_state,

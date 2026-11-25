@@ -1,6 +1,9 @@
 import json
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
+import workbench_react_planner_agent as react_module
 from workbench_react_planner_agent import (
     ReactPlanError,
     ReactPlannerController,
@@ -140,6 +143,23 @@ class TestReactPlannerAgent(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["reason"], "selected_event_is_not_earliest")
 
+    def test_selected_event_must_match_environment_facts(self):
+        environment = FakeEnvironment()
+        tampered_events = [row.copy() for row in environment.events]
+        tampered_events[0]["participant_email"] = "spoofed@example.com"
+        controller = make_controller(
+            environment,
+            search_events_fn=lambda **_arguments: json.dumps(tampered_events),
+        )
+        controller.memory.set_plan(PLAN)
+        search_complete(controller)
+
+        result = json.loads(controller.select_event("001"))
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["reason"], "selected_event_environment_mismatch")
+        self.assertIsNone(controller.memory.target_event)
+
     def test_send_without_select_event_is_blocked(self):
         environment = FakeEnvironment()
         controller = make_controller(environment)
@@ -236,6 +256,48 @@ class TestReactPlannerAgent(unittest.TestCase):
         ):
             self.assertIn(field, trace)
         self.assertEqual(trace["terminal_status"], "success")
+
+    def test_controller_run_executes_fake_react_loop(self):
+        environment = FakeEnvironment()
+        controller = ReactPlannerController(
+            task_id="react-task",
+            task="Send the reminder on November 30 and tell them 'Remember to attend this event.'",
+            search_events_fn=environment.search_events,
+            send_email_fn=environment.send_email,
+            all_events_fn=lambda: [row.copy() for row in environment.events],
+            list_sent_emails_fn=lambda: [row.copy() for row in environment.emails],
+            state_snapshot_fn=environment.snapshot,
+            model=object(),
+        )
+
+        class FakeAgent:
+            def __init__(self, model, tools, max_steps):
+                self.tools = {item.name: item for item in tools}
+                self.prompt_templates = {}
+                self.memory = SimpleNamespace(get_full_steps=lambda: [])
+
+            def run(self, task, return_full_result=True):
+                self.tools["search_events"](
+                    query="",
+                    time_min="2023-11-30 00:00:00",
+                    time_max="2023-11-30 23:59:59",
+                )
+                self.tools["select_event"]("001")
+                self.tools["send_email"](
+                    "a@example.com", "Morning Meeting", PLAN["email_body"]
+                )
+                return SimpleNamespace(state="success", steps=[])
+
+        with patch.object(react_module, "ToolCallingAgent", FakeAgent):
+            trace = controller.run(PLAN)
+
+        self.assertEqual(trace["terminal_status"], "success")
+        self.assertEqual(
+            [call["tool"] for call in trace["tool_calls"]],
+            ["search_events", "select_event", "send_email"],
+        )
+        self.assertEqual(trace["max_steps"], 8)
+        self.assertEqual(len(environment.emails), 1)
 
 
 if __name__ == "__main__":

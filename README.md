@@ -1,6 +1,6 @@
 # Long-Horizon Agent
 
-这个项目在本地 WorkBench 子集上比较自由 ReAct 和受约束的任务执行流程。
+这个项目在本地 WorkBench 子集上比较自由 ReAct、确定性控制器和 Planner-Guided ReAct。
 
 ## 当前方法
 
@@ -13,11 +13,15 @@ Additional Baseline 使用当前已有的 Structured Planner + Deterministic Exe
 ```text
 结构化 Planner
     ↓
-确定性事件选择
+LLM 调用 search_events
     ↓
-TaskMemory
+工具观察返回结构化候选集
     ↓
-ExecutionMonitor
+LLM 调用 select_event
+    ↓
+ProgressMonitor 与 ExecutionMonitor
+    ↓
+LLM 调用 send_email
     ↓
 一次受保护的邮件发送
     ↓
@@ -35,12 +39,12 @@ Improved 2 尚未实现。发送异常后的不确定状态、状态查询和有
 ## 项目文件
 
 - `workbench_subset_agent.py` 保存 Baseline 适配器。
-- `workbench_planner_agent.py` 保存 Improved 1 控制器和本地 Qwen 计划入口。
+- `workbench_planner_agent.py` 保存 Additional Baseline 确定性控制器和本地 Qwen 计划入口。
 - `workbench_react_planner_agent.py` 保存新的 `improved_1_react` 控制器。
 - `planning_memory.py` 保存事件选择器和 `TaskMemory`。
 - `execution_monitor.py` 保存发送指纹、参数检查和单次发送保护。
 - `verify_workbench_subset.py` 根据最终邮箱状态验证任务结果。
-- `experiments/run_task_set.py` 为固定任务集创建独立数据副本并运行 Baseline 与 Improved 1。
+- `experiments/run_task_set.py` 为固定任务集创建独立数据副本并运行三个方法。
 - `snapshots/baseline/` 保存 Baseline 文件、轨迹和 Git 状态。
 
 ## 本地测试
@@ -54,19 +58,19 @@ Improved 2 尚未实现。发送异常后的不确定状态、状态查询和有
   -v
 ```
 
-当前共有 41 项测试，覆盖无序候选、候选截断边界、TaskMemory 状态、错误收件人、错误标题、重复发送、查询重试、发送后写入再抛异常、最终状态为零封或多封邮件、固定任务集加载、Planner 任务正文和日期校验，以及新的 ReAct 控制器安全边界。
+当前共有 44 项测试，覆盖无序候选、候选截断边界、TaskMemory 状态、错误收件人、错误标题、重复发送、查询重试、发送后写入再抛异常、最终状态为零封或多封邮件、固定任务集加载、Planner 任务正文和日期校验，以及新的 ReAct 控制器安全边界和完整循环统计。
 
 ## 离线验证
 
-Improved 1 的离线记录位于 `experiments/manifests/improved_1_offline.json`。该记录使用本地测试夹具，不调用模型，结果为选择事件 `00000200`，新增 1 封目标邮件，验证器判定任务成功，额外副作用为空。
+Additional Baseline 的离线记录位于 `experiments/manifests/improved_1_offline.json`。文件中的历史 `method: improved_1` 标签保留用于归档兼容。该记录使用本地测试夹具，不调用模型，结果为选择事件 `00000200`，新增 1 封目标邮件，验证器判定任务成功，额外副作用为空。
 
-离线夹具结果仍然保存在独立 manifest 中，没有被标记为真实模型结果。真实 Qwen 运行结果保存在 `experiments/manifests/improved_1_qwen.json`。
+离线夹具结果仍然保存在独立 manifest 中，没有被标记为真实模型结果。Additional Baseline 的真实 Qwen 运行结果保存在 `experiments/manifests/improved_1_qwen.json`，该文件也保留历史 `method: improved_1` 标签。新的 ReAct 结果使用 `improved_1_react` 标识。
 
-## 真实 Qwen 单任务验证
+## Additional Baseline 真实 Qwen 单任务验证
 
 真实 Qwen 运行使用主机侧 CUDA 和本地 `llama-server` 完成。服务配置为 Qwen3-4B Q4_K_M、llama.cpp build `b12534`、`temperature=0`、`max_tokens=256`，模型别名为 `longagent-qwen`。
 
-本次单任务验证使用任务 `multi_domain_030`。控制器生成了 `target_date=2023-11-30` 的结构化计划，搜索返回四个候选活动，Python 选择事件 `00000200`，随后只执行一次受保护的 `email.send_email`。
+本次单任务验证使用任务 `multi_domain_030`。Additional Baseline 生成了 `target_date=2023-11-30` 的结构化计划，搜索返回四个候选活动，Python 选择事件 `00000200`，随后只执行一次受保护的 `email.send_email`。
 
 验证结果如下。
 
@@ -89,7 +93,17 @@ Improved 1 的离线记录位于 `experiments/manifests/improved_1_offline.json`
 
 运行轨迹会写入 `runs/workbench-improved1-<uuid>.json`。真实运行记录包含模型文件、量化版本、llama.cpp 版本、采样参数、任务文本、初始沙箱状态和代码提交。
 
-当前已完成一次真实 Qwen 验证。最新轨迹为 `runs/workbench-improved1-7b0c8169ff324a6da77ba541945ea194.json`，使用主机侧 CUDA 运行 Qwen3-4B Q4_K_M。
+当前已完成一次 Additional Baseline 真实 Qwen 验证。最新轨迹为 `runs/workbench-improved1-7b0c8169ff324a6da77ba541945ea194.json`，使用主机侧 CUDA 运行 Qwen3-4B Q4_K_M。
+
+## improved_1_react 本地 Qwen 入口
+
+新的 Planner-Guided ReAct 控制器使用独立入口。它会让模型在 `search_events` 的结构化观察之后继续选择 `select_event` 和 `send_email`，并在真实发送入口执行 Monitor 检查。
+
+```bash
+/home/mark/micromamba/envs/longagent/bin/python workbench_react_planner_agent.py
+```
+
+该入口只用于后续单任务验证。`improved_1_react` 当前已有离线完整循环测试，尚未进行真实 Qwen 运行或批量结果归档。
 
 ## 候选集完整性边界
 
@@ -101,7 +115,7 @@ Improved 1 的离线记录位于 `experiments/manifests/improved_1_offline.json`
 
 后续可以增加分页、完整性标志或适配器级别的完整日期查询接口。
 
-当初始邮箱已经存在相同发送指纹时，当前 Improved 1 会阻止发送并将任务记录为失败。`already_satisfied`、`duplicate_blocked`、`send_uncertain` 和 `send_failed` 的区分留给 Improved 2 的状态恢复设计。
+当初始邮箱已经存在相同发送指纹时，当前控制器会阻止发送并将任务记录为失败。`already_satisfied`、`duplicate_blocked`、`send_uncertain` 和 `send_failed` 的区分留给 Improved 2 的状态恢复设计。
 
 ## 固定对照任务集
 
@@ -131,11 +145,11 @@ Improved 1 的离线记录位于 `experiments/manifests/improved_1_offline.json`
 已有三任务真实 Qwen 对照结果如下，方法为 Baseline 与 Additional Baseline。新的 `improved_1_react` 尚未进行真实 Qwen 批量验证。
 
 - Baseline 的验证器任务成功率为 `2/3`，框架成功率为 `3/3`，平均环境工具调用数为 `11/3=3.67`，总解析工具调用平均数为 `5.0`。
-- Improved 1 的验证器任务成功率为 `3/3`，框架成功率为 `2/3`，平均环境工具调用数为 `5/3=1.67`，总解析工具调用平均数同为 `1.67`。
-- Baseline 的 Invalid Action Rate 为 `4/15`，其中 `15` 是所有解析工具调用，Invalid Send Rate 为 `4/6`，其中 `6` 是发送调用。Improved 1 的两项指标均为 `0`，发送调用数为 `2`。
-- Baseline 的 `final_answer` 调用数为 `4`，Improved 1 没有 `final_answer` 工具调用。
+- Additional Baseline 的验证器任务成功率为 `3/3`，框架成功率为 `2/3`，平均环境工具调用数为 `5/3=1.67`，总解析工具调用平均数同为 `1.67`。
+- Baseline 的 Invalid Action Rate 为 `4/15`，其中 `15` 是所有解析工具调用，Invalid Send Rate 为 `4/6`，其中 `6` 是发送调用。Additional Baseline 的两项指标均为 `0`，发送调用数为 `2`。
+- Baseline 的 `final_answer` 调用数为 `4`，Additional Baseline 没有 `final_answer` 工具调用。
 - Baseline 的额外副作用出现在 `email_first_event_001`，最终新增 5 封邮件，其中 3 封是错误目标邮件，1 封是正确目标邮件的重复发送，总额外邮件数为 4。
-- Improved 1 在两个发送任务中各新增 1 封匹配邮件，在无匹配任务中保持零发送。该任务的控制器框架状态为失败，最终任务验证结果为成功，因为预期行为是安全终止且不发送。
+- Additional Baseline 在两个发送任务中各新增 1 封匹配邮件，在无匹配任务中保持零发送。该任务的控制器框架状态为失败，最终任务验证结果为成功，因为预期行为是安全终止且不发送。
 
 批量结果中的 `average_environment_tool_calls` 排除 `final_answer`，`average_tool_calls` 包含全部解析工具调用。`invalid_action_rate` 使用全部解析工具调用作为分母，`invalid_send_rate` 使用发送调用作为分母。结果可以通过以下命令从已有轨迹重算，不需要再次调用模型。
 
