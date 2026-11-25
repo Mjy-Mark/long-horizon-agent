@@ -6,7 +6,9 @@
 
 Baseline 使用自由的 ReAct 工具调用流程。
 
-Improved 1 使用以下流程。
+Additional Baseline 使用当前已有的 Structured Planner + Deterministic Executor + Task Memory + Execution Monitor。
+
+新的 Improved 1 使用 Planner-Guided ReAct + Task Memory + Progress Monitor。Planner 生成结构化子目标，LLM 在工具观察后继续选择下一步动作，Python 只在事件选择和真实发送入口执行安全约束。
 
 ```text
 结构化 Planner
@@ -22,7 +24,9 @@ ExecutionMonitor
 最终状态验证
 ```
 
-Improved 1 的准确名称是 `Structured Planner + Deterministic Executor + Task Memory + Execution Monitor`。当前实现由 Python 控制器执行搜索、事件选择、邮件准备、发送和状态验证。LLM 只生成结构化计划，当前流程没有让 LLM 根据工具观测进行多轮 ReAct 决策。
+现有确定性控制器的准确名称是 `Structured Planner + Deterministic Executor + Task Memory + Execution Monitor`。它作为 Additional Baseline 保留，历史轨迹、manifest 和 metrics_v2 结果不重写。
+
+新的 ReAct 控制器位于 `workbench_react_planner_agent.py`，流程为 Planner → `search_events` → `select_event` → `send_email` → 最终状态验证。新的控制器尚未进行真实 Qwen 批量验证。
 
 Improved 2 尚未实现。发送异常后的不确定状态、状态查询和有限恢复重试属于下一阶段。
 
@@ -32,6 +36,7 @@ Improved 2 尚未实现。发送异常后的不确定状态、状态查询和有
 
 - `workbench_subset_agent.py` 保存 Baseline 适配器。
 - `workbench_planner_agent.py` 保存 Improved 1 控制器和本地 Qwen 计划入口。
+- `workbench_react_planner_agent.py` 保存新的 `improved_1_react` 控制器。
 - `planning_memory.py` 保存事件选择器和 `TaskMemory`。
 - `execution_monitor.py` 保存发送指纹、参数检查和单次发送保护。
 - `verify_workbench_subset.py` 根据最终邮箱状态验证任务结果。
@@ -49,7 +54,7 @@ Improved 2 尚未实现。发送异常后的不确定状态、状态查询和有
   -v
 ```
 
-当前共有 29 项测试，覆盖无序候选、候选截断边界、TaskMemory 状态、错误收件人、错误标题、重复发送、查询重试、发送后写入再抛异常、最终状态为零封或多封邮件，以及固定任务集加载、验证和 Baseline 解析错误步骤中的工具调用。
+当前共有 39 项测试，覆盖无序候选、候选截断边界、TaskMemory 状态、错误收件人、错误标题、重复发送、查询重试、发送后写入再抛异常、最终状态为零封或多封邮件、固定任务集加载和新的 ReAct 控制器安全边界。
 
 ## 离线验证
 
@@ -114,9 +119,16 @@ Improved 1 的离线记录位于 `experiments/manifests/improved_1_offline.json`
 /home/mark/micromamba/envs/longagent/bin/python experiments/run_task_set.py
 ```
 
-每个方法和任务都会生成独立轨迹，批量结果写入 `experiments/results/task-set-<batch_id>.json`，汇总 manifest 位于 `experiments/manifests/task_set_20261123T052134Z-377b3633.json`。
+每个方法和任务都会生成独立轨迹，批量结果写入 `experiments/results/task-set-<batch_id>.json`，汇总 manifest 位于 `experiments/manifests/task_set_20261123T052134Z-377b3633.json`。新的方法标识为 `improved_1_react`，不会覆盖历史 `improved_1` 结果。
 
-最终三任务真实 Qwen 对照结果如下。
+新的三方法批量入口如下，当前只完成离线代码验证，没有把离线结果写成真实 Qwen 结果。
+
+```bash
+/home/mark/micromamba/envs/longagent/bin/python experiments/run_task_set.py \
+  --methods baseline_react additional_baseline_deterministic improved_1_react
+```
+
+已有三任务真实 Qwen 对照结果如下，方法为 Baseline 与 Additional Baseline。新的 `improved_1_react` 尚未进行真实 Qwen 批量验证。
 
 - Baseline 的验证器任务成功率为 `2/3`，框架成功率为 `3/3`，平均环境工具调用数为 `11/3=3.67`，总解析工具调用平均数为 `5.0`。
 - Improved 1 的验证器任务成功率为 `3/3`，框架成功率为 `2/3`，平均环境工具调用数为 `5/3=1.67`，总解析工具调用平均数同为 `1.67`。
@@ -143,4 +155,4 @@ Baseline 轨迹显示原始自由 ReAct 流程新增了 5 封邮件，其中 1 �
 
 ## 当前状态
 
-Improved 1 的本地控制器、TaskMemory、ExecutionMonitor、29 项测试、固定任务集运行器、离线记录、一次真实单任务验证、三任务真实批量对照和指标重算已经完成。Recovery 实现暂不在当前阶段范围内。
+当前项目包含 Baseline、Additional Baseline 和新的 `improved_1_react` 最小实现。新的 ReAct 控制器已有离线测试，真实 Qwen 批量验证尚未开始。Improved 2 的 Self-Recovery 暂不在当前阶段范围内。

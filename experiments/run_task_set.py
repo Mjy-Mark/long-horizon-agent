@@ -33,6 +33,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from verify_workbench_subset import verify_workbench_trace
 from workbench_planner_agent import WorkbenchPlannerController
+from workbench_react_planner_agent import ReactPlannerController
 from workbench_subset_agent import WorkbenchSubsetState
 
 
@@ -213,6 +214,44 @@ def run_improved_1(
     return trace
 
 
+def run_improved_1_react(
+    task: dict[str, Any],
+    workbench_root: Path,
+    trace_path: Path,
+    *,
+    model_id: str,
+    api_base: str,
+    temperature: float,
+    max_tokens: int,
+    batch_id: str,
+) -> dict[str, Any]:
+    state = WorkbenchSubsetState(workbench_root)
+    model = make_model(model_id, api_base, temperature, max_tokens)
+    controller = ReactPlannerController(
+        task_id=task["task_id"],
+        task=task["instruction"],
+        search_events_fn=state.search_events,
+        send_email_fn=state.send_email,
+        all_events_fn=lambda: [row.copy() for row in state.calendar_events],
+        list_sent_emails_fn=lambda: [row.copy() for row in state.emails],
+        state_snapshot_fn=state.snapshot,
+        model=model,
+    )
+    trace = controller.run()
+    trace.update(
+        {
+            "batch_id": batch_id,
+            "task_id": task["task_id"],
+            "task": task["instruction"],
+            "model_id": model.model_id,
+            "smolagents_version": version("smolagents"),
+            **initial_state_metadata(workbench_root),
+        }
+    )
+    _write_trace(trace_path, trace)
+    return trace
+
+
 def _baseline_tool_calls(trace: dict[str, Any]) -> list[dict[str, Any]]:
     calls: list[dict[str, Any]] = []
     for step in trace.get("steps", []):
@@ -279,6 +318,10 @@ def evaluate_run(
     answer_calls = final_answer_calls(calls)
     email_calls = send_calls(calls)
     invalid_sends = invalid_action_count(task, calls)
+    monitor_decisions = trace.get("monitor_decisions", [])
+    react_steps = trace.get("react_steps", [])
+    memory_transitions = trace.get("memory_transitions", [])
+    planner_call_count = 1 if trace.get("planner_output") is not None else 0
     return {
         "task_id": task["task_id"],
         "method": trace["method"],
@@ -291,6 +334,12 @@ def evaluate_run(
         "send_call_count": len(email_calls),
         "invalid_action_count": invalid_sends,
         "invalid_send_count": invalid_sends,
+        "planner_call_count": planner_call_count,
+        "react_step_count": len(react_steps),
+        "memory_transition_count": len(memory_transitions),
+        "monitor_block_count": sum(
+            not decision.get("allowed", False) for decision in monitor_decisions
+        ),
         "unexpected_email_count": verdict["unexpected_email_count"],
         "duplicate_expected_email_count": verdict["duplicate_expected_email_count"],
         "extra_email_count": verdict["extra_email_count"],
@@ -330,6 +379,14 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
                 record["duplicate_expected_email_count"] for record in method_records
             ),
             "extra_email_count": sum(record["extra_email_count"] for record in method_records),
+            "planner_call_count": sum(record["planner_call_count"] for record in method_records),
+            "react_step_count": sum(record["react_step_count"] for record in method_records),
+            "memory_transition_count": sum(
+                record["memory_transition_count"] for record in method_records
+            ),
+            "monitor_block_count": sum(
+                record["monitor_block_count"] for record in method_records
+            ),
         }
     return summary
 
@@ -397,8 +454,21 @@ def run_batch(args: argparse.Namespace) -> Path:
                         max_steps=args.max_steps,
                         batch_id=batch_id,
                     )
-                else:
+                elif method == "additional_baseline_deterministic":
                     trace = run_improved_1(
+                        task,
+                        temp_root,
+                        trace_path,
+                        model_id=args.model_id,
+                        api_base=args.api_base,
+                        temperature=args.temperature,
+                        max_tokens=args.max_tokens,
+                        batch_id=batch_id,
+                    )
+                    trace["method"] = "additional_baseline_deterministic"
+                    _write_trace(trace_path, trace)
+                else:
+                    trace = run_improved_1_react(
                         task,
                         temp_root,
                         trace_path,
@@ -440,8 +510,12 @@ def main() -> None:
     parser.add_argument(
         "--methods",
         nargs="+",
-        choices=["baseline_react", "improved_1"],
-        default=["baseline_react", "improved_1"],
+        choices=[
+            "baseline_react",
+            "additional_baseline_deterministic",
+            "improved_1_react",
+        ],
+        default=["baseline_react", "additional_baseline_deterministic", "improved_1_react"],
     )
     parser.add_argument("--trace-root", type=Path, default=DEFAULT_TRACE_ROOT)
     parser.add_argument("--results-path", type=Path, default=None)
