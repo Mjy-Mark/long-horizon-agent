@@ -288,13 +288,18 @@ class RobustToolCallingModel:
     def _repair_messages(self, messages: list[Any]) -> list[Any]:
         return [
             *messages,
-            {
-                "role": "user",
-                "content": (
-                    "上一轮工具调用没有被解析。请根据当前观察重试，只输出一个合法 JSON 工具调用，"
-                    "不要输出思考过程、Markdown 或其他说明文本。"
-                ),
-            },
+            ChatMessage(
+                role=MessageRole.USER,
+                content=[
+                    {
+                        "type": "text",
+                        "text": (
+                            "上一轮工具调用没有被解析。请根据当前观察重试，只输出一个合法 JSON 工具调用，"
+                            "不要输出思考过程、Markdown 或其他说明文本。"
+                        ),
+                    }
+                ],
+            ),
         ]
 
     def _synthetic_final_answer(self) -> ChatMessage:
