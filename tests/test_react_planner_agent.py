@@ -4,9 +4,16 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import workbench_react_planner_agent as react_module
+from smolagents.models import (
+    ChatMessage,
+    ChatMessageToolCall,
+    ChatMessageToolCallFunction,
+    MessageRole,
+)
 from workbench_react_planner_agent import (
     ReactPlanError,
     ReactPlannerController,
+    extract_tool_call_json,
     normalize_time_bound,
     parse_react_plan,
 )
@@ -55,7 +62,7 @@ class FakeEnvironment:
         return {"emails_added": [row.copy() for row in self.emails]}
 
 
-def make_controller(environment, search_events_fn=None):
+def make_controller(environment, search_events_fn=None, model=None, max_steps=8):
     return ReactPlannerController(
         task_id="react-task",
         task="Send the reminder for the first event on November 30.",
@@ -64,6 +71,8 @@ def make_controller(environment, search_events_fn=None):
         all_events_fn=lambda: [row.copy() for row in environment.events],
         list_sent_emails_fn=lambda: [row.copy() for row in environment.emails],
         state_snapshot_fn=environment.snapshot,
+        model=model,
+        max_steps=max_steps,
     )
 
 
@@ -73,6 +82,39 @@ def search_complete(controller):
         time_min="2023-11-30 00:00:00",
         time_max="2023-11-30 23:59:59",
     )
+
+
+def fake_tool_response(name, arguments):
+    return ChatMessage(
+        role=MessageRole.ASSISTANT,
+        content="",
+        tool_calls=[
+            ChatMessageToolCall(
+                function=ChatMessageToolCallFunction(name=name, arguments=arguments),
+                id=f"fake-{name}",
+                type="function",
+            )
+        ],
+    )
+
+
+class FakeQwenModel:
+    model_id = "fake-qwen"
+    tool_name_key = "name"
+    tool_arguments_key = "arguments"
+
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.generate_count = 0
+
+    def generate(self, messages, **kwargs):
+        self.generate_count += 1
+        if not self.responses:
+            raise AssertionError("FakeQwenModel ran out of responses")
+        return self.responses.pop(0)
+
+    def parse_tool_calls(self, message):
+        raise AssertionError("native fake tool calls should not require text parsing")
 
 
 class TestReactPlannerAgent(unittest.TestCase):
@@ -89,6 +131,23 @@ class TestReactPlannerAgent(unittest.TestCase):
             self.assertEqual(normalize_time_bound(timestamp, "min"), timestamp)
             self.assertEqual(normalize_time_bound(timestamp, "max"), timestamp)
         self.assertIsNone(normalize_time_bound(None, "min"))
+
+    def test_extract_tool_call_json_handles_wrappers_and_trailing_text(self):
+        content = (
+            "<think>ignore this</think>\n"
+            "Here is the action:\n"
+            "```json\n"
+            '{"name":"select_event","arguments":{"event_id":"001"}}\n'
+            "```\n"
+            "The action is ready."
+        )
+
+        normalized = extract_tool_call_json(content)
+
+        self.assertEqual(
+            json.loads(normalized),
+            {"name": "select_event", "arguments": {"event_id": "001"}},
+        )
 
     def test_valid_plan_is_parsed(self):
         self.assertEqual(parse_react_plan(json.dumps(PLAN)), PLAN)
@@ -258,6 +317,137 @@ class TestReactPlannerAgent(unittest.TestCase):
 
         self.assertEqual(controller.memory.status, "completed_without_action")
         self.assertEqual(environment.emails, [])
+
+    def test_safe_stop_no_match_is_framework_success(self):
+        environment = FakeEnvironment(events=[])
+        model = FakeQwenModel(
+            [
+                fake_tool_response(
+                    "search_events",
+                    {
+                        "query": "",
+                        "time_min": "2023-11-30",
+                        "time_max": "2023-11-30",
+                    },
+                ),
+                fake_tool_response(
+                    "final_answer",
+                    {"answer": "No matching event."},
+                ),
+            ]
+        )
+        controller = make_controller(environment, model=model, max_steps=4)
+
+        trace = controller.run(PLAN)
+
+        self.assertEqual(trace["terminal_status"], "safe_stop_no_match")
+        self.assertTrue(trace["success"])
+        self.assertEqual(environment.emails, [])
+
+    def test_parse_retry_does_not_duplicate_send(self):
+        environment = FakeEnvironment()
+        model = FakeQwenModel(
+            [
+                fake_tool_response(
+                    "search_events",
+                    {
+                        "query": "",
+                        "time_min": "2023-11-30",
+                        "time_max": "2023-11-30",
+                    },
+                ),
+                fake_tool_response("select_event", {"event_id": "001"}),
+                fake_tool_response(
+                    "send_email",
+                    {
+                        "recipient": "a@example.com",
+                        "subject": "Morning Meeting",
+                        "body": PLAN["email_body"],
+                    },
+                ),
+                ChatMessage(role=MessageRole.ASSISTANT, content="", tool_calls=None),
+                fake_tool_response("final_answer", {"answer": "sent"}),
+            ]
+        )
+        controller = make_controller(environment, model=model, max_steps=4)
+
+        trace = controller.run(PLAN)
+
+        self.assertEqual(trace["terminal_status"], "success")
+        self.assertEqual(len(environment.emails), 1)
+        self.assertEqual(trace["parse_diagnostics"]["parse_retry_count"], 1)
+        self.assertEqual(trace["agent_step_count"], 4)
+
+    def test_parse_error_does_not_consume_agent_step(self):
+        environment = FakeEnvironment()
+        model = FakeQwenModel(
+            [
+                fake_tool_response(
+                    "search_events",
+                    {
+                        "query": "",
+                        "time_min": "2023-11-30",
+                        "time_max": "2023-11-30",
+                    },
+                ),
+                fake_tool_response("select_event", {"event_id": "001"}),
+                fake_tool_response(
+                    "send_email",
+                    {
+                        "recipient": "a@example.com",
+                        "subject": "Morning Meeting",
+                        "body": PLAN["email_body"],
+                    },
+                ),
+                ChatMessage(role=MessageRole.ASSISTANT, content="", tool_calls=None),
+                fake_tool_response("final_answer", {"answer": "sent"}),
+            ]
+        )
+        controller = make_controller(environment, model=model, max_steps=4)
+
+        trace = controller.run(PLAN)
+
+        self.assertEqual(trace["agent_step_count"], 4)
+        self.assertEqual(trace["parse_diagnostics"]["base_generate_count"], 5)
+        self.assertEqual(trace["terminal_status"], "success")
+
+    def test_final_answer_error_after_send_keeps_task_success(self):
+        environment = FakeEnvironment()
+        model = FakeQwenModel(
+            [
+                fake_tool_response(
+                    "search_events",
+                    {
+                        "query": "",
+                        "time_min": "2023-11-30",
+                        "time_max": "2023-11-30",
+                    },
+                ),
+                fake_tool_response("select_event", {"event_id": "001"}),
+                fake_tool_response(
+                    "send_email",
+                    {
+                        "recipient": "a@example.com",
+                        "subject": "Morning Meeting",
+                        "body": PLAN["email_body"],
+                    },
+                ),
+                ChatMessage(role=MessageRole.ASSISTANT, content="", tool_calls=None),
+                ChatMessage(role=MessageRole.ASSISTANT, content="", tool_calls=None),
+                ChatMessage(role=MessageRole.ASSISTANT, content="", tool_calls=None),
+                ChatMessage(role=MessageRole.ASSISTANT, content="", tool_calls=None),
+            ]
+        )
+        controller = make_controller(environment, model=model, max_steps=4)
+
+        trace = controller.run(PLAN)
+
+        self.assertEqual(trace["terminal_status"], "success")
+        self.assertTrue(trace["success"])
+        self.assertEqual(len(environment.emails), 1)
+        self.assertEqual(
+            trace["parse_diagnostics"]["synthetic_final_answer_count"], 1
+        )
 
     def test_incomplete_candidate_set_blocks_send(self):
         events = [

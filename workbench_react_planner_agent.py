@@ -16,6 +16,12 @@ from typing import Any, Callable, Iterable
 from uuid import uuid4
 
 from smolagents import OpenAIModel, ToolCallingAgent, tool
+from smolagents.models import (
+    ChatMessage,
+    ChatMessageToolCall,
+    ChatMessageToolCallFunction,
+    MessageRole,
+)
 
 from execution_monitor import ExecutionMonitor, MonitorViolation, make_send_fingerprint
 from planning_memory import TaskMemory, TaskMemoryError, select_first_event
@@ -177,6 +183,185 @@ def normalize_time_bound(value: str | None, boundary: str) -> str | None:
     date.fromisoformat(value)
     suffix = "00:00:00" if boundary == "min" else "23:59:59"
     return f"{value} {suffix}"
+
+
+def _content_to_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            item.get("text", "")
+            for item in content
+            if isinstance(item, dict) and isinstance(item.get("text"), str)
+        )
+    return "" if content is None else str(content)
+
+
+def _balanced_json_objects(text: str) -> Iterable[str]:
+    for start, character in enumerate(text):
+        if character not in "{[":
+            continue
+        closing = "}" if character == "{" else "]"
+        depth = 0
+        in_string = False
+        escaped = False
+        for index in range(start, len(text)):
+            current = text[index]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif current == "\\":
+                    escaped = True
+                elif current == '"':
+                    in_string = False
+                continue
+            if current == '"':
+                in_string = True
+            elif current == character:
+                depth += 1
+            elif current == closing:
+                depth -= 1
+                if depth == 0:
+                    yield text[start : index + 1]
+                    break
+
+
+def extract_tool_call_json(content: Any, tool_name_key: str = "name") -> str | None:
+    """Extract one tool-call JSON object from wrapped model text."""
+
+    text = _content_to_text(content)
+    if not text.strip():
+        return None
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<think>.*$", "", text, flags=re.IGNORECASE | re.DOTALL)
+    sources = [text]
+    sources.extend(
+        match.group(1)
+        for match in re.finditer(r"```(?:json)?\s*(.*?)```", text, flags=re.IGNORECASE | re.DOTALL)
+    )
+    for source in sources:
+        for candidate in _balanced_json_objects(source):
+            try:
+                parsed = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict) and tool_name_key in parsed:
+                return json.dumps(parsed, ensure_ascii=False)
+    return None
+
+
+class RobustToolCallingModel:
+    """Adapt model responses without spending extra ReAct environment steps."""
+
+    def __init__(self, model: Any, max_parse_retries: int = 3) -> None:
+        self.model = model
+        self.max_parse_retries = max_parse_retries
+        self.parse_attempts = 0
+        self.parse_error_count = 0
+        self.parse_retry_count = 0
+        self.recovered_call_count = 0
+        self.synthetic_final_answer_count = 0
+        self.parse_error_outputs: list[dict[str, Any]] = []
+        self.base_generate_count = 0
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.model, name)
+
+    def _record_parse_error(self, response: Any) -> None:
+        self.parse_attempts += 1
+        self.parse_error_count += 1
+        self.parse_error_outputs.append(
+            {
+                "content": _content_to_text(getattr(response, "content", None)),
+                "finish_reason": self._finish_reason(response),
+            }
+        )
+
+    @staticmethod
+    def _finish_reason(response: Any) -> str | None:
+        raw = getattr(response, "raw", None)
+        try:
+            return raw.choices[0].finish_reason
+        except (AttributeError, IndexError, TypeError):
+            return None
+
+    def _repair_messages(self, messages: list[Any]) -> list[Any]:
+        return [
+            *messages,
+            {
+                "role": "user",
+                "content": (
+                    "上一轮工具调用没有被解析。请根据当前观察重试，只输出一个合法 JSON 工具调用，"
+                    "不要输出思考过程、Markdown 或其他说明文本。"
+                ),
+            },
+        ]
+
+    def _synthetic_final_answer(self) -> ChatMessage:
+        self.synthetic_final_answer_count += 1
+        return ChatMessage(
+            role=MessageRole.ASSISTANT,
+            content="",
+            tool_calls=[
+                ChatMessageToolCall(
+                    function=ChatMessageToolCallFunction(
+                        name="final_answer",
+                        arguments={
+                            "answer": "工具调用解析失败，已停止继续执行。",
+                        },
+                    ),
+                    id=uuid4().hex,
+                    type="function",
+                )
+            ],
+        )
+
+    def generate(self, messages: list[Any], **kwargs: Any) -> Any:
+        current_messages = list(messages)
+        for attempt in range(self.max_parse_retries + 1):
+            self.base_generate_count += 1
+            response = self.model.generate(current_messages, **kwargs)
+            if getattr(response, "tool_calls", None):
+                return response
+            normalized = extract_tool_call_json(
+                getattr(response, "content", None),
+                getattr(self.model, "tool_name_key", "name"),
+            )
+            if normalized is not None:
+                response.content = normalized
+                self.recovered_call_count += 1
+                return response
+            self._record_parse_error(response)
+            if attempt < self.max_parse_retries:
+                self.parse_retry_count += 1
+                current_messages = self._repair_messages(list(messages))
+                continue
+            return self._synthetic_final_answer()
+        return self._synthetic_final_answer()
+
+    def parse_tool_calls(self, message: Any) -> Any:
+        if getattr(message, "tool_calls", None):
+            return self.model.parse_tool_calls(message)
+        normalized = extract_tool_call_json(
+            getattr(message, "content", None),
+            getattr(self.model, "tool_name_key", "name"),
+        )
+        if normalized is not None:
+            message.content = normalized
+            self.recovered_call_count += 1
+            return self.model.parse_tool_calls(message)
+        return self._synthetic_final_answer()
+
+    def diagnostics(self) -> dict[str, Any]:
+        return {
+            "parse_attempts": self.parse_attempts,
+            "parse_error_count": self.parse_error_count,
+            "parse_retry_count": self.parse_retry_count,
+            "recovered_call_count": self.recovered_call_count,
+            "synthetic_final_answer_count": self.synthetic_final_answer_count,
+            "base_generate_count": self.base_generate_count,
+            "parse_error_outputs": deepcopy(self.parse_error_outputs),
+        }
 
 
 class ProgressMonitor:
@@ -366,6 +551,15 @@ class ReactPlannerController:
         self.tool_observations: list[dict[str, Any]] = []
         self.requested_window: dict[str, str | None] | None = None
         self.effective_window: dict[str, str | None] | None = None
+        self.parse_diagnostics: dict[str, Any] = {
+            "parse_attempts": 0,
+            "parse_error_count": 0,
+            "parse_retry_count": 0,
+            "recovered_call_count": 0,
+            "synthetic_final_answer_count": 0,
+            "base_generate_count": 0,
+            "parse_error_outputs": [],
+        }
         self.initial_state = deepcopy(state_snapshot_fn())
         self.send_exception = False
 
@@ -547,8 +741,13 @@ class ReactPlannerController:
             self.memory.mark_failed({"type": type(exc).__name__, "message": str(exc)})
             return self._trace(planner_output, [], "failed", None)
 
+        model = (
+            RobustToolCallingModel(self.model)
+            if self.model is not None
+            else self.model
+        )
         agent = ToolCallingAgent(
-            model=self.model,
+            model=model,
             tools=self._tools(),
             max_steps=self.max_steps,
         )
@@ -572,6 +771,8 @@ class ReactPlannerController:
             except Exception:
                 steps = []
             self.memory.mark_failed({"type": type(exc).__name__, "message": str(exc)})
+        if isinstance(model, RobustToolCallingModel):
+            self.parse_diagnostics = model.diagnostics()
 
         final_state = self.state_snapshot_fn()
         added_emails = final_state.get("emails_added", [])
@@ -592,7 +793,7 @@ class ReactPlannerController:
         if self.memory.send_confirmed and len(added_emails) == 1:
             terminal_status = "success"
         elif self.memory.status == "completed_without_action":
-            terminal_status = "completed_without_action"
+            terminal_status = "safe_stop_no_match"
         elif self.memory.status in {"blocked", "candidate_insufficient"}:
             terminal_status = "blocked"
         elif self.memory.send_attempted or agent_state == "exception":
@@ -616,6 +817,11 @@ class ReactPlannerController:
             "task": self.task,
             "planner_output": deepcopy(planner_output),
             "react_steps": deepcopy(steps),
+            "agent_step_count": sum(
+                1
+                for step in steps
+                if isinstance(step, dict) and step.get("step_number") is not None
+            ),
             "tool_calls": deepcopy(self.tool_calls),
             "tool_observations": deepcopy(self.tool_observations),
             "memory_transitions": deepcopy(memory_snapshot["memory_transitions"]),
@@ -627,12 +833,13 @@ class ReactPlannerController:
             "completeness_reason": self.memory.completeness_reason,
             "requested_window": deepcopy(self.requested_window),
             "effective_window": deepcopy(self.effective_window),
+            "parse_diagnostics": deepcopy(self.parse_diagnostics),
             "max_steps": self.max_steps,
             "initial_state": deepcopy(self.initial_state),
             "final_state": deepcopy(self.state_snapshot_fn()),
             "agent_state": agent_state,
             "terminal_status": terminal_status,
-            "success": terminal_status == "success",
+            "success": terminal_status in {"success", "safe_stop_no_match"},
         }
 
 
