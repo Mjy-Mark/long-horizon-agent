@@ -1,0 +1,214 @@
+{
+  "method": "improved_1_react",
+  "model_used": true,
+  "model_id": "longagent-qwen",
+  "server_endpoint": "http://127.0.0.1:8080/v1",
+  "smolagents_version": "1.26.0",
+  "code_commit": "0a6789d14ba2c4d90b4df63338e4f464d51d55fe",
+  "code_worktree_dirty_at_run": true,
+  "batch_id": "20261128T040749Z-169f29e7",
+  "task_file": "experiments/tasks.jsonl",
+  "trajectory_root": "runs/task-set-react-qwen-20261128-v3/20261128T040749Z-169f29e7",
+  "result_file": "experiments/results/improved_1_react_qwen_3tasks_20261128_v3.json",
+  "recorded_at_utc": "2026-11-28T04:09:49.125013+00:00",
+  "status": "three_task_validation_success",
+  "task_count": 3,
+  "task_success_rate": 1.0,
+  "framework_success_rate": 1.0,
+  "average_tool_calls": 2.3333333333333335,
+  "average_environment_tool_calls": 2.3333333333333335,
+  "average_parse_calls": 3.3333333333333335,
+  "average_agent_steps": 3.3333333333333335,
+  "parse_error_count": 4,
+  "parse_retry_count": 4,
+  "parse_attempt_count": 14,
+  "parse_error_rate": 0.2857142857142857,
+  "max_steps_error_count": 0,
+  "invalid_action_rate": 0.0,
+  "invalid_send_rate": 0.0,
+  "side_effect_count": 0,
+  "new_email_count": 2,
+  "final_answer_calls": 3,
+  "send_calls": 2,
+  "safe_stop_no_match_count": 1,
+  "metric_definitions": {
+    "tool_calls": "environment tool calls excluding final_answer",
+    "parse_calls": "successfully parsed model tool calls including final_answer",
+    "agent_steps": "actual ToolCallingAgent action steps, excluding adapter retries",
+    "parse_attempt_count": "underlying model generations observed by the parser adapter",
+    "parse_error_rate": "adapter parse errors divided by underlying model generations",
+    "invalid_action_rate": "invalid send calls divided by successfully parsed model tool calls",
+    "invalid_send_rate": "invalid send calls divided by send calls",
+    "side_effect_count": "extra emails beyond the expected final email count"
+  },
+  "records": [
+    {
+      "task_id": "email_first_event_001",
+      "trace": "runs/task-set-react-qwen-20261128-v3/20261128T040749Z-169f29e7/email_first_event_001-improved_1_react.json",
+      "task_success": true,
+      "framework_success": true,
+      "terminal_status": "success",
+      "tool_calls": 3,
+      "parse_calls": 4,
+      "final_answer_calls": 1,
+      "send_calls": 1,
+      "agent_step_count": 4,
+      "parse_error_count": 2,
+      "parse_retry_count": 2,
+      "parse_attempt_count": 6,
+      "parse_error_rate": 0.3333333333333333,
+      "max_steps_error_count": 0,
+      "invalid_action": 0,
+      "invalid_send": 0,
+      "new_email_count": 1,
+      "side_effect_count": 0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0,
+      "side_effects": [],
+      "selected_event": {
+        "event_id": "00000200",
+        "event_name": "Annual Budget Planning Session",
+        "participant_email": "fatima.khan@atlas.com",
+        "event_start": "2023-11-30 09:30:00",
+        "duration": "60"
+      },
+      "requested_window": {
+        "time_min": "2023-11-30",
+        "time_max": "2023-11-30"
+      },
+      "effective_window": {
+        "time_min": "2023-11-30 00:00:00",
+        "time_max": "2023-11-30 23:59:59"
+      },
+      "candidate_completeness": "complete",
+      "returned_count": 4,
+      "completeness_reason": "returned_ids_match_environment_events",
+      "parse_diagnostics": {
+        "parse_attempts": 2,
+        "parse_error_count": 2,
+        "parse_retry_count": 2,
+        "recovered_call_count": 0,
+        "synthetic_final_answer_count": 0,
+        "base_generate_count": 6,
+        "parse_error_outputs": [
+          {
+            "content": "",
+            "finish_reason": "stop"
+          },
+          {
+            "content": "",
+            "finish_reason": "stop"
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "email_first_event_late_date_001",
+      "trace": "runs/task-set-react-qwen-20261128-v3/20261128T040749Z-169f29e7/email_first_event_late_date_001-improved_1_react.json",
+      "task_success": true,
+      "framework_success": true,
+      "terminal_status": "success",
+      "tool_calls": 3,
+      "parse_calls": 4,
+      "final_answer_calls": 1,
+      "send_calls": 1,
+      "agent_step_count": 4,
+      "parse_error_count": 2,
+      "parse_retry_count": 2,
+      "parse_attempt_count": 6,
+      "parse_error_rate": 0.3333333333333333,
+      "max_steps_error_count": 0,
+      "invalid_action": 0,
+      "invalid_send": 0,
+      "new_email_count": 1,
+      "side_effect_count": 0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0,
+      "side_effects": [],
+      "selected_event": {
+        "event_id": "00000174",
+        "event_name": "New Employee Onboarding",
+        "participant_email": "leila.azizi@atlas.com",
+        "event_start": "2023-12-21 09:00:00",
+        "duration": "120"
+      },
+      "requested_window": {
+        "time_min": "2023-12-21",
+        "time_max": "2023-12-21"
+      },
+      "effective_window": {
+        "time_min": "2023-12-21 00:00:00",
+        "time_max": "2023-12-21 23:59:59"
+      },
+      "candidate_completeness": "complete",
+      "returned_count": 4,
+      "completeness_reason": "returned_ids_match_environment_events",
+      "parse_diagnostics": {
+        "parse_attempts": 2,
+        "parse_error_count": 2,
+        "parse_retry_count": 2,
+        "recovered_call_count": 0,
+        "synthetic_final_answer_count": 0,
+        "base_generate_count": 6,
+        "parse_error_outputs": [
+          {
+            "content": "",
+            "finish_reason": "stop"
+          },
+          {
+            "content": "",
+            "finish_reason": "stop"
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "email_no_matching_event_001",
+      "trace": "runs/task-set-react-qwen-20261128-v3/20261128T040749Z-169f29e7/email_no_matching_event_001-improved_1_react.json",
+      "task_success": true,
+      "framework_success": true,
+      "terminal_status": "safe_stop_no_match",
+      "tool_calls": 1,
+      "parse_calls": 2,
+      "final_answer_calls": 1,
+      "send_calls": 0,
+      "agent_step_count": 2,
+      "parse_error_count": 0,
+      "parse_retry_count": 0,
+      "parse_attempt_count": 2,
+      "parse_error_rate": 0.0,
+      "max_steps_error_count": 0,
+      "invalid_action": 0,
+      "invalid_send": 0,
+      "new_email_count": 0,
+      "side_effect_count": 0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0,
+      "side_effects": [],
+      "selected_event": null,
+      "requested_window": {
+        "time_min": "2023-12-22",
+        "time_max": "2023-12-22"
+      },
+      "effective_window": {
+        "time_min": "2023-12-22 00:00:00",
+        "time_max": "2023-12-22 23:59:59"
+      },
+      "candidate_completeness": "complete",
+      "returned_count": 0,
+      "completeness_reason": "environment_has_no_events_on_target_date",
+      "parse_diagnostics": {
+        "parse_attempts": 0,
+        "parse_error_count": 0,
+        "parse_retry_count": 0,
+        "recovered_call_count": 0,
+        "synthetic_final_answer_count": 0,
+        "base_generate_count": 2,
+        "parse_error_outputs": []
+      }
+    }
+  ]
+}

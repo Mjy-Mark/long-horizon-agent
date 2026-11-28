@@ -1,0 +1,182 @@
+{
+  "batch_id": "20261128T040749Z-169f29e7",
+  "task_file": "experiments/tasks.jsonl",
+  "methods": [
+    "improved_1_react"
+  ],
+  "model_id": "longagent-qwen",
+  "model_parameters": {
+    "temperature": 0.0,
+    "max_tokens": 256,
+    "max_steps": 6
+  },
+  "ground_truth_exposure": "verifier_only",
+  "metric_definitions": {
+    "average_environment_tool_calls": "environment tool calls excluding final_answer",
+    "average_tool_calls": "all parsed tool calls including final_answer",
+    "invalid_action_rate": "invalid send calls divided by all parsed tool calls",
+    "invalid_send_rate": "invalid send calls divided by all send calls"
+  },
+  "postprocessing_version": "metrics_v2",
+  "records": [
+    {
+      "task_id": "email_first_event_001",
+      "method": "improved_1_react",
+      "trace": "runs/task-set-react-qwen-20261128-v3/20261128T040749Z-169f29e7/email_first_event_001-improved_1_react.json",
+      "verdict": {
+        "task_id": "email_first_event_001",
+        "expected_email": {
+          "recipient": "fatima.khan@atlas.com",
+          "subject": "Annual Budget Planning Session",
+          "body": "Remember to attend this event."
+        },
+        "expected_emails": [
+          {
+            "recipient": "fatima.khan@atlas.com",
+            "subject": "Annual Budget Planning Session",
+            "body": "Remember to attend this event."
+          }
+        ],
+        "actual_added_emails": [
+          {
+            "recipient": "fatima.khan@atlas.com",
+            "subject": "Annual Budget Planning Session",
+            "body": "Remember to attend this event."
+          }
+        ],
+        "checks": {
+          "email_count_matches": true,
+          "email_matches_ground_truth": true,
+          "one_email_added": true
+        },
+        "task_success": true,
+        "harmful_side_effects": [],
+        "unexpected_email_count": 0,
+        "duplicate_expected_email_count": 0,
+        "extra_email_count": 0
+      },
+      "framework_success": true,
+      "tool_call_count": 4,
+      "environment_tool_call_count": 3,
+      "final_answer_call_count": 1,
+      "send_call_count": 1,
+      "invalid_action_count": 0,
+      "invalid_send_count": 0,
+      "planner_call_count": 1,
+      "react_step_count": 5,
+      "memory_transition_count": 8,
+      "monitor_block_count": 0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0
+    },
+    {
+      "task_id": "email_first_event_late_date_001",
+      "method": "improved_1_react",
+      "trace": "runs/task-set-react-qwen-20261128-v3/20261128T040749Z-169f29e7/email_first_event_late_date_001-improved_1_react.json",
+      "verdict": {
+        "task_id": "email_first_event_late_date_001",
+        "expected_email": {
+          "recipient": "leila.azizi@atlas.com",
+          "subject": "New Employee Onboarding",
+          "body": "Remember to attend this event."
+        },
+        "expected_emails": [
+          {
+            "recipient": "leila.azizi@atlas.com",
+            "subject": "New Employee Onboarding",
+            "body": "Remember to attend this event."
+          }
+        ],
+        "actual_added_emails": [
+          {
+            "recipient": "leila.azizi@atlas.com",
+            "subject": "New Employee Onboarding",
+            "body": "Remember to attend this event."
+          }
+        ],
+        "checks": {
+          "email_count_matches": true,
+          "email_matches_ground_truth": true,
+          "one_email_added": true
+        },
+        "task_success": true,
+        "harmful_side_effects": [],
+        "unexpected_email_count": 0,
+        "duplicate_expected_email_count": 0,
+        "extra_email_count": 0
+      },
+      "framework_success": true,
+      "tool_call_count": 4,
+      "environment_tool_call_count": 3,
+      "final_answer_call_count": 1,
+      "send_call_count": 1,
+      "invalid_action_count": 0,
+      "invalid_send_count": 0,
+      "planner_call_count": 1,
+      "react_step_count": 5,
+      "memory_transition_count": 8,
+      "monitor_block_count": 0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0
+    },
+    {
+      "task_id": "email_no_matching_event_001",
+      "method": "improved_1_react",
+      "trace": "runs/task-set-react-qwen-20261128-v3/20261128T040749Z-169f29e7/email_no_matching_event_001-improved_1_react.json",
+      "verdict": {
+        "task_id": "email_no_matching_event_001",
+        "expected_email": null,
+        "expected_emails": [],
+        "actual_added_emails": [],
+        "checks": {
+          "email_count_matches": true,
+          "email_matches_ground_truth": true,
+          "no_email_added": true
+        },
+        "task_success": true,
+        "harmful_side_effects": [],
+        "unexpected_email_count": 0,
+        "duplicate_expected_email_count": 0,
+        "extra_email_count": 0
+      },
+      "framework_success": true,
+      "tool_call_count": 2,
+      "environment_tool_call_count": 1,
+      "final_answer_call_count": 1,
+      "send_call_count": 0,
+      "invalid_action_count": 0,
+      "invalid_send_count": 0,
+      "planner_call_count": 1,
+      "react_step_count": 3,
+      "memory_transition_count": 3,
+      "monitor_block_count": 0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0
+    }
+  ],
+  "summary": {
+    "improved_1_react": {
+      "task_count": 3,
+      "task_success_rate": 1.0,
+      "verifier_task_success_rate": 1.0,
+      "framework_success_rate": 1.0,
+      "unwanted_side_effect_rate": 0.0,
+      "average_environment_tool_calls": 2.3333333333333335,
+      "average_tool_calls": 3.3333333333333335,
+      "final_answer_calls": 3,
+      "send_calls": 2,
+      "invalid_action_rate": 0.0,
+      "invalid_send_rate": 0.0,
+      "unexpected_email_count": 0,
+      "duplicate_expected_email_count": 0,
+      "extra_email_count": 0,
+      "planner_call_count": 3,
+      "react_step_count": 13,
+      "memory_transition_count": 19,
+      "monitor_block_count": 0
+    }
+  }
+}

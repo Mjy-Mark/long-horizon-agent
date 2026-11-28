@@ -1,0 +1,46 @@
+{
+  "method": "improved_1_react",
+  "model_used": true,
+  "model_id": "longagent-qwen",
+  "smolagents_version": "1.26.0",
+  "server_endpoint": "http://127.0.0.1:8080/v1",
+  "code_commit": "8490fdc705d8f5b85e7a85732b860f4d958ee379",
+  "code_worktree_dirty_at_run": true,
+  "task_id": "multi_domain_030",
+  "task_source": "benchmarks/workbench_subset/task.json",
+  "trajectory": "runs/workbench-react-planner-2417339721604b9c895df2ad678d73ac.json",
+  "recorded_at_utc": "2026-11-28T02:00:59.378505+00:00",
+  "status": "single_task_validation_success",
+  "terminal_status": "success",
+  "task_success": true,
+  "framework_success": true,
+  "tool_calls": 3,
+  "parse_calls": 4,
+  "final_answer_calls": 1,
+  "parse_error_count": 2,
+  "invalid_action": 0,
+  "invalid_send": 0,
+  "side_effects": [],
+  "unexpected_email_count": 0,
+  "duplicate_expected_email_count": 0,
+  "extra_email_count": 0,
+  "selected_event": {
+    "event_id": "00000200",
+    "event_name": "Annual Budget Planning Session",
+    "participant_email": "fatima.khan@atlas.com",
+    "event_start": "2023-11-30 09:30:00",
+    "duration": "60"
+  },
+  "requested_window": {
+    "time_min": "2023-11-30",
+    "time_max": "2023-11-30"
+  },
+  "effective_window": {
+    "time_min": "2023-11-30 00:00:00",
+    "time_max": "2023-11-30 23:59:59"
+  },
+  "candidate_completeness": "complete",
+  "returned_count": 4,
+  "completeness_reason": "returned_ids_match_environment_events",
+  "batch_run": false
+}
