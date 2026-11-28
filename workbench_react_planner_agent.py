@@ -167,6 +167,18 @@ def extract_task_date(task: str) -> str | None:
     return date(2023, months[match.group(1).lower()], int(match.group(2))).isoformat()
 
 
+def normalize_time_bound(value: str | None, boundary: str) -> str | None:
+    """Expand a date-only search bound while preserving full timestamps."""
+
+    if boundary not in {"min", "max"}:
+        raise ValueError(f"未知时间边界: {boundary}")
+    if value is None or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return value
+    date.fromisoformat(value)
+    suffix = "00:00:00" if boundary == "min" else "23:59:59"
+    return f"{value} {suffix}"
+
+
 class ProgressMonitor:
     """Environment-aware progress and side-effect monitor."""
 
@@ -352,6 +364,8 @@ class ReactPlannerController:
         )
         self.tool_calls: list[dict[str, Any]] = []
         self.tool_observations: list[dict[str, Any]] = []
+        self.requested_window: dict[str, str | None] | None = None
+        self.effective_window: dict[str, str | None] | None = None
         self.initial_state = deepcopy(state_snapshot_fn())
         self.send_exception = False
 
@@ -401,19 +415,32 @@ class ReactPlannerController:
         time_max: str | None = None,
     ) -> str:
         arguments = {"query": query, "time_min": time_min, "time_max": time_max}
+        requested_window = {"time_min": time_min, "time_max": time_max}
+        self.requested_window = deepcopy(requested_window)
         try:
-            result = self.search_events_fn(**arguments)
+            effective_window = {
+                "time_min": normalize_time_bound(time_min, "min"),
+                "time_max": normalize_time_bound(time_max, "max"),
+            }
+            self.effective_window = deepcopy(effective_window)
+            effective_arguments = {"query": query, **effective_window}
+            result = self.search_events_fn(**effective_arguments)
             candidates = json.loads(result)
             if not isinstance(candidates, list):
                 raise ValueError("search_events 返回结构不是列表")
             completeness, reason = self._candidate_completeness(
-                candidates, query, time_min, time_max
+                candidates,
+                query,
+                effective_window["time_min"],
+                effective_window["time_max"],
             )
             observation = {
                 "events": candidates,
                 "returned_count": len(candidates),
                 "candidate_completeness": completeness,
                 "completeness_reason": reason,
+                "requested_window": requested_window,
+                "effective_window": effective_window,
             }
             self.memory.record_search_result(candidates, completeness, reason)
             if not candidates and completeness == "complete":
@@ -423,7 +450,16 @@ class ReactPlannerController:
             )
         except Exception as exc:
             self.memory.mark_failed({"tool": "search_events", "error": str(exc)})
-            result = json.dumps({"ok": False, "code": "search_failed", "error": str(exc)})
+            result = json.dumps(
+                {
+                    "ok": False,
+                    "code": "search_failed",
+                    "error": str(exc),
+                    "requested_window": requested_window,
+                    "effective_window": self.effective_window,
+                },
+                ensure_ascii=False,
+            )
             return self._record_tool("search_events", arguments, result)
 
     def select_event(self, event_id: str) -> str:
@@ -589,6 +625,8 @@ class ReactPlannerController:
             "candidate_completeness": self.memory.candidate_completeness,
             "returned_count": self.memory.returned_count,
             "completeness_reason": self.memory.completeness_reason,
+            "requested_window": deepcopy(self.requested_window),
+            "effective_window": deepcopy(self.effective_window),
             "max_steps": self.max_steps,
             "initial_state": deepcopy(self.initial_state),
             "final_state": deepcopy(self.state_snapshot_fn()),

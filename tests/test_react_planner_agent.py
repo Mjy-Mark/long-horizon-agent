@@ -7,6 +7,7 @@ import workbench_react_planner_agent as react_module
 from workbench_react_planner_agent import (
     ReactPlanError,
     ReactPlannerController,
+    normalize_time_bound,
     parse_react_plan,
 )
 
@@ -75,6 +76,20 @@ def search_complete(controller):
 
 
 class TestReactPlannerAgent(unittest.TestCase):
+    def test_normalize_time_bound_expands_dates_and_preserves_timestamps(self):
+        self.assertEqual(
+            normalize_time_bound("2023-11-30", "min"),
+            "2023-11-30 00:00:00",
+        )
+        self.assertEqual(
+            normalize_time_bound("2023-11-30", "max"),
+            "2023-11-30 23:59:59",
+        )
+        for timestamp in ("2023-11-30 08:15:00", "2023-11-30T08:15:00Z"):
+            self.assertEqual(normalize_time_bound(timestamp, "min"), timestamp)
+            self.assertEqual(normalize_time_bound(timestamp, "max"), timestamp)
+        self.assertIsNone(normalize_time_bound(None, "min"))
+
     def test_valid_plan_is_parsed(self):
         self.assertEqual(parse_react_plan(json.dumps(PLAN)), PLAN)
         with self.assertRaises(ReactPlanError):
@@ -131,6 +146,40 @@ class TestReactPlannerAgent(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertEqual(controller.memory.target_event["event_id"], "001")
+
+    def test_search_records_requested_and_effective_windows(self):
+        environment = FakeEnvironment()
+        received = {}
+
+        def search_events(**arguments):
+            received.update(arguments)
+            return json.dumps(environment.events)
+
+        controller = make_controller(environment, search_events_fn=search_events)
+        controller.memory.set_plan(PLAN)
+
+        observation = json.loads(
+            controller.search_events(
+                query="",
+                time_min="2023-11-30",
+                time_max="2023-11-30",
+            )
+        )
+        trace = controller._trace(PLAN, [], "blocked", "success")
+
+        expected_requested = {
+            "time_min": "2023-11-30",
+            "time_max": "2023-11-30",
+        }
+        expected_effective = {
+            "time_min": "2023-11-30 00:00:00",
+            "time_max": "2023-11-30 23:59:59",
+        }
+        self.assertEqual(received, {"query": "", **expected_effective})
+        self.assertEqual(observation["requested_window"], expected_requested)
+        self.assertEqual(observation["effective_window"], expected_effective)
+        self.assertEqual(trace["requested_window"], expected_requested)
+        self.assertEqual(trace["effective_window"], expected_effective)
 
     def test_wrong_event_is_blocked(self):
         environment = FakeEnvironment()
